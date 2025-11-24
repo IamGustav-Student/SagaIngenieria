@@ -137,6 +137,15 @@
                             <TextBlock Text="CALIBRAR"/>
                         </StackPanel>
                     </Button>
+                    <!-- Botón IMPRIMIR (Nuevo) -->
+                    <Rectangle Width="1" Height="20" Fill="#444" Margin="10,0"/>
+                    <Button x:Name="btnImprimir" Click="btnImprimir_Click" Style="{StaticResource MenuButtonStyle}">
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Text="🖨" Margin="0,0,8,0"/>
+                            <!-- Icono impresora -->
+                            <TextBlock Text="REPORTE PDF"/>
+                        </StackPanel>
+                    </Button>
                 </StackPanel>
 
                 <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Top" HorizontalAlignment="Right">

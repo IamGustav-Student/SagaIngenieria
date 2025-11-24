@@ -1,12 +1,13 @@
-﻿using System;
+﻿using SagaIngenieria.Modelos;
+using ScottPlot;
+using System;
 using System.Collections.Generic;
+using System.Linq;
+using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
 using Media = System.Windows.Media;
-using ScottPlot;
-using System.Linq;
-using System.Threading.Tasks;
 
 namespace SagaIngenieria
 {
@@ -99,6 +100,13 @@ namespace SagaIngenieria
             GraficoPrincipal.Plot.Axes.Color(ScottPlot.Color.FromHex("#AAAAAA"));
             GraficoPrincipal.Plot.Axes.Title.Label.Text = "SAGA - MONITOR V2";
             GraficoPrincipal.Plot.Axes.Title.Label.ForeColor = ScottPlot.Color.FromHex("#FFFFFF");
+
+            // --- LEYENDA (REFERENCIAS) ---
+            GraficoPrincipal.Plot.ShowLegend();
+            GraficoPrincipal.Plot.Legend.FontColor = ScottPlot.Color.FromHex("#FFFFFF");
+            GraficoPrincipal.Plot.Legend.BackgroundColor = ScottPlot.Color.FromHex("#222222");
+            GraficoPrincipal.Plot.Legend.OutlineColor = ScottPlot.Color.FromHex("#444444");
+            GraficoPrincipal.Plot.Legend.Location = Alignment.UpperRight;
         }
 
         private void ProcesarDatosFisicos(double rawPos, double rawFuerza)
@@ -162,6 +170,7 @@ namespace SagaIngenieria
         {
             GraficoPrincipal.Plot.Clear();
 
+            // --- 1. DIBUJAR REFERENCIA (FANTASMA) ---
             if (_ensayoReferencia != null && _ensayoReferencia.Count > 0)
             {
                 double[] refX = null, refY = null;
@@ -178,9 +187,11 @@ namespace SagaIngenieria
                     spRef.Color = ScottPlot.Color.FromHex("#444444");
                     spRef.LineWidth = 2;
                     spRef.LinePattern = LinePattern.Dotted;
+                    spRef.Label = "Referencia (Fondo)";
                 }
             }
 
+            // --- 2. DIBUJAR ENSAYO PRINCIPAL ---
             var colorFuerza = ScottPlot.Color.FromHex("#FF4081");
             var colorPos = ScottPlot.Color.FromHex("#00E5FF");
             var colorVel = ScottPlot.Color.FromHex("#B2FF59");
@@ -225,20 +236,29 @@ namespace SagaIngenieria
 
             if (datosY == null && datosX == null) return;
 
+            // --- CONFIGURACIÓN DE EJES Y ETIQUETAS ---
             switch (_modoGrafico)
             {
                 case "FvsD":
                     var sp1 = GraficoPrincipal.Plot.Add.Scatter(datosX, datosY);
                     sp1.Color = _viendoHistorial ? colorHistorial : colorFuerza;
                     sp1.LineWidth = 2;
+                    sp1.Label = "Ciclo";
+
                     GraficoPrincipal.Plot.Title("Ciclo de Histéresis");
+                    GraficoPrincipal.Plot.Axes.Bottom.Label.Text = "Posición (mm)"; // ETIQUETA EJE X
+                    GraficoPrincipal.Plot.Axes.Left.Label.Text = "Fuerza (kg)";     // ETIQUETA EJE Y
                     break;
 
                 case "FvsV":
                     var sp2 = GraficoPrincipal.Plot.Add.Scatter(datosX, datosY);
                     sp2.Color = _viendoHistorial ? colorHistorial : colorVel;
                     sp2.LineWidth = 2;
+                    sp2.Label = "Amortiguamiento";
+
                     GraficoPrincipal.Plot.Title("Fuerza vs Velocidad");
+                    GraficoPrincipal.Plot.Axes.Bottom.Label.Text = "Velocidad (mm/s)";
+                    GraficoPrincipal.Plot.Axes.Left.Label.Text = "Fuerza (kg)";
                     break;
 
                 case "FPromVsV":
@@ -246,29 +266,68 @@ namespace SagaIngenieria
                     spProm.Color = colorProm;
                     spProm.LineWidth = 3;
                     spProm.MarkerSize = 0;
+                    spProm.Label = "Promedio";
+
                     GraficoPrincipal.Plot.Title("Curva Característica (Promedio)");
+                    GraficoPrincipal.Plot.Axes.Bottom.Label.Text = "Velocidad (mm/s)";
+                    GraficoPrincipal.Plot.Axes.Left.Label.Text = "Fuerza (kg)";
                     break;
 
                 case "FDvsT":
-                case "FVvsT":
                     if (_viendoHistorial)
                     {
-                        var s1 = GraficoPrincipal.Plot.Add.Scatter(datosX, datosY); s1.Color = colorFuerza; s1.Axes.YAxis = GraficoPrincipal.Plot.Axes.Left;
-                        var s2 = GraficoPrincipal.Plot.Add.Scatter(datosX, datosY2); s2.Color = (_modoGrafico == "FDvsT" ? colorPos : colorVel); s2.Axes.YAxis = GraficoPrincipal.Plot.Axes.Right;
+                        var s1 = GraficoPrincipal.Plot.Add.Scatter(datosX, datosY);
+                        s1.Color = colorFuerza; s1.Axes.YAxis = GraficoPrincipal.Plot.Axes.Left; s1.Label = "Fuerza";
+
+                        var s2 = GraficoPrincipal.Plot.Add.Scatter(datosX, datosY2);
+                        s2.Color = colorPos; s2.Axes.YAxis = GraficoPrincipal.Plot.Axes.Right; s2.Label = "Posición";
                     }
                     else
                     {
-                        var s1 = GraficoPrincipal.Plot.Add.Signal(datosY); s1.Color = colorFuerza; s1.Axes.YAxis = GraficoPrincipal.Plot.Axes.Left;
-                        var s2 = GraficoPrincipal.Plot.Add.Signal(datosY2); s2.Color = (_modoGrafico == "FDvsT" ? colorPos : colorVel); s2.Axes.YAxis = GraficoPrincipal.Plot.Axes.Right;
+                        var s1 = GraficoPrincipal.Plot.Add.Signal(datosY);
+                        s1.Color = colorFuerza; s1.Axes.YAxis = GraficoPrincipal.Plot.Axes.Left; s1.Label = "Fuerza";
+
+                        var s2 = GraficoPrincipal.Plot.Add.Signal(datosY2);
+                        s2.Color = colorPos; s2.Axes.YAxis = GraficoPrincipal.Plot.Axes.Right; s2.Label = "Posición";
                     }
-                    GraficoPrincipal.Plot.Title("Dominio del Tiempo");
+                    GraficoPrincipal.Plot.Title("Dominio del Tiempo (Fz + Pos)");
+                    GraficoPrincipal.Plot.Axes.Bottom.Label.Text = "Tiempo (ms)";
+                    GraficoPrincipal.Plot.Axes.Left.Label.Text = "Fuerza (kg)";
+                    GraficoPrincipal.Plot.Axes.Right.Label.Text = "Posición (mm)";
+                    break;
+
+                case "FVvsT":
+                    if (_viendoHistorial)
+                    {
+                        var s1 = GraficoPrincipal.Plot.Add.Scatter(datosX, datosY);
+                        s1.Color = colorFuerza; s1.Axes.YAxis = GraficoPrincipal.Plot.Axes.Left; s1.Label = "Fuerza";
+
+                        var s2 = GraficoPrincipal.Plot.Add.Scatter(datosX, datosY2);
+                        s2.Color = colorVel; s2.Axes.YAxis = GraficoPrincipal.Plot.Axes.Right; s2.Label = "Velocidad";
+                    }
+                    else
+                    {
+                        var s1 = GraficoPrincipal.Plot.Add.Signal(datosY);
+                        s1.Color = colorFuerza; s1.Axes.YAxis = GraficoPrincipal.Plot.Axes.Left; s1.Label = "Fuerza";
+
+                        var s2 = GraficoPrincipal.Plot.Add.Signal(datosY2);
+                        s2.Color = colorVel; s2.Axes.YAxis = GraficoPrincipal.Plot.Axes.Right; s2.Label = "Velocidad";
+                    }
+                    GraficoPrincipal.Plot.Title("Dominio del Tiempo (Fz + Vel)");
+                    GraficoPrincipal.Plot.Axes.Bottom.Label.Text = "Tiempo (ms)";
+                    GraficoPrincipal.Plot.Axes.Left.Label.Text = "Fuerza (kg)";
+                    GraficoPrincipal.Plot.Axes.Right.Label.Text = "Velocidad (mm/s)";
                     break;
 
                 case "PicoVsV":
                     var sp3 = GraficoPrincipal.Plot.Add.Scatter(datosX, datosY);
                     sp3.Color = ScottPlot.Color.FromHex("#FFFFFF");
                     sp3.MarkerSize = 2; sp3.LineWidth = 0;
+                    sp3.Label = "Picos";
+
                     GraficoPrincipal.Plot.Title("Puntos Pico");
+                    GraficoPrincipal.Plot.Axes.Bottom.Label.Text = "Velocidad (mm/s)";
+                    GraficoPrincipal.Plot.Axes.Left.Label.Text = "Fuerza (kg)";
                     break;
             }
 
@@ -479,5 +538,84 @@ namespace SagaIngenieria
             }
             catch { MessageBox.Show("Error al leer archivo"); return null; }
         }
+        private void btnImprimir_Click(object sender, RoutedEventArgs e)
+        {
+            // 1. Definir QUÉ vamos a imprimir
+            Modelos.Ensayo ensayoAImprimir = null;
+
+            if (_viendoHistorial && _ensayoCargado.Count > 0)
+            {
+                // Si estamos viendo un historial, imprimimos ese
+                // Reconstruimos un objeto ensayo temporal con los datos actuales
+                ensayoAImprimir = new Modelos.Ensayo
+                {
+                    Id = 0, // No importa para el PDF temporal
+                    Fecha = DateTime.Parse(lblFecha.Text.Replace("Fecha: ", "")),
+                    Notas = lblNotas.Text,
+                    MaxCompresion = double.Parse(txtMaxComp.Text),
+                    MaxExpansion = double.Parse(txtMaxExpa.Text),
+                    Vehiculo = new Modelos.Vehiculo
+                    {
+                        Modelo = lblVehiculo.Text.Replace("Vehículo: ", ""),
+                        Cliente = new Modelos.Cliente { Nombre = lblCliente.Text.Replace("Cliente: ", "") }
+                    },
+                    // Volvemos a serializar la memoria cargada para pasarla al generador
+                    DatosCrudos = System.Text.Encoding.UTF8.GetBytes(System.Text.Json.JsonSerializer.Serialize(_ensayoCargado))
+                };
+            }
+            else if (!_motorEncendido && _ensayoGrabado.Count > 0)
+            {
+                // Si acabamos de grabar (pero no guardamos en historial aún), imprimimos lo de memoria
+                if (MessageBox.Show("Estás imprimiendo un ensayo recién grabado.\n¿Deseas continuar?", "Confirmar", MessageBoxButton.YesNo) == MessageBoxResult.No) return;
+
+                ensayoAImprimir = new Modelos.Ensayo
+                {
+                    Fecha = DateTime.Now,
+                    Notas = "Ensayo sin guardar en BD",
+                    MaxCompresion = maxCompresion,
+                    MaxExpansion = maxExpansion,
+                    Vehiculo = new Modelos.Vehiculo { Modelo = "En Vivo", Cliente = new Modelos.Cliente { Nombre = "Taller" } },
+                    DatosCrudos = System.Text.Encoding.UTF8.GetBytes(System.Text.Json.JsonSerializer.Serialize(_ensayoGrabado))
+                };
+            }
+            else
+            {
+                MessageBox.Show("Debes CARGAR un ensayo del historial para imprimirlo.", "Nada para imprimir");
+                return;
+            }
+
+            // 2. Diálogo de Guardar PDF
+            var saveDialog = new Microsoft.Win32.SaveFileDialog
+            {
+                FileName = $"Reporte_SAGA_{DateTime.Now:yyyyMMdd_HHmm}.pdf",
+                Filter = "Documento PDF|*.pdf"
+            };
+
+            if (saveDialog.ShowDialog() == true)
+            {
+                try
+                {
+                    // 3. ¡MAGIA! Llamamos a nuestro generador
+                    GeneradorReporte.Generar(ensayoAImprimir, saveDialog.FileName);
+
+                    // 4. Preguntar si quiere abrirlo
+                    if (MessageBox.Show("Reporte generado con éxito.\n¿Deseas abrirlo ahora?", "Listo", MessageBoxButton.YesNo) == MessageBoxResult.Yes)
+                    {
+                        // Truco para abrir el PDF en Windows con el visor predeterminado
+                        var p = new System.Diagnostics.Process();
+                        p.StartInfo = new System.Diagnostics.ProcessStartInfo(saveDialog.FileName)
+                        {
+                            UseShellExecute = true
+                        };
+                        p.Start();
+                    }
+                }
+                catch (Exception ex)
+                {
+                    MessageBox.Show("Error al generar PDF: " + ex.Message);
+                }
+            }
+        }
     }
 }
+     
