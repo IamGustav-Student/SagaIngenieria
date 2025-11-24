@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Input; // Para poder arrastrar la ventana
 using Media = System.Windows.Media;
 using ScottPlot;
 using System.Linq;
@@ -22,35 +23,27 @@ namespace SagaIngenieria
         // --- 1. CEREBRO Y MEMORIA ---
         private Simulador _miSimulador = new Simulador();
 
-        // BUFFER VIVO (Cola circular para animación suave)
         List<double> bufferTiempo = new List<double>();
         List<double> bufferPos = new List<double>();
         List<double> bufferFuerza = new List<double>();
         List<double> bufferVel = new List<double>();
 
-        // MEMORIA DE GRABACIÓN (Datos crudos completos)
         List<PuntoDeEnsayo> _ensayoGrabado = new List<PuntoDeEnsayo>();
-
-        // MEMORIA DE REPLAY (Datos cargados del historial)
         List<PuntoDeEnsayo> _ensayoCargado = new List<PuntoDeEnsayo>();
 
-        // Variables Físicas
         double tiempoActual = 0;
         double lastPos = 0;
         double lastTime = 0;
 
-        // Calibración
         double offsetPosicion = 0;
         double offsetFuerza = 0;
 
-        // Picos
         double maxCompresion = 0;
         double maxExpansion = 0;
 
-        // Estados
         bool _motorEncendido = false;
         bool _grabando = false;
-        bool _viendoHistorial = false; // NUEVO: ¿Estamos viendo un archivo viejo?
+        bool _viendoHistorial = false;
         string _modoGrafico = "FvsD";
 
         public MainWindow()
@@ -60,6 +53,26 @@ namespace SagaIngenieria
             ConfigurarGraficoInicial();
 
             _miSimulador.NuevosDatosRecibidos += ProcesarDatosFisicos;
+        }
+
+        // --- NUEVO: Permitir mover la ventana sin barra de título ---
+        private void Border_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
+        {
+            this.DragMove();
+        }
+
+        // --- NUEVO: Botón Salir ---
+        private void btnSalir_Click(object sender, RoutedEventArgs e)
+        {
+            if (_motorEncendido || _grabando)
+            {
+                if (MessageBox.Show("El motor está encendido o grabando. ¿Seguro que quieres salir forzosamente?",
+                    "¡Precaución!", MessageBoxButton.YesNo, MessageBoxImage.Warning) == MessageBoxResult.No)
+                {
+                    return;
+                }
+            }
+            Application.Current.Shutdown();
         }
 
         private void InicializarBaseDeDatos()
@@ -91,15 +104,10 @@ namespace SagaIngenieria
             GraficoPrincipal.Plot.Axes.Title.Label.ForeColor = ScottPlot.Color.FromHex("#FFFFFF");
         }
 
-        // --- BUCLE DE PROCESAMIENTO (100Hz) ---
         private void ProcesarDatosFisicos(double rawPos, double rawFuerza)
         {
             Dispatcher.Invoke(() =>
             {
-                // Si estamos viendo un historial, ignoramos los datos en vivo para el gráfico
-                // (pero quizás quieras seguir calculando picos si el motor gira... por ahora priorizamos el historial)
-
-                // 1. Física en Vivo
                 double posReal = rawPos - offsetPosicion;
                 double fuerzaReal = rawFuerza - offsetFuerza;
                 double dt = (tiempoActual - lastTime);
@@ -109,18 +117,15 @@ namespace SagaIngenieria
                 lastPos = posReal;
                 lastTime = tiempoActual;
 
-                // Actualizar números siempre (Telemetría viva)
                 if (!_viendoHistorial)
                 {
                     txtFuerza.Text = fuerzaReal.ToString("F1");
                     txtPosicion.Text = posReal.ToString("F1");
                     txtVelocidad.Text = velocidad.ToString("F1");
 
-                    // Picos en vivo
                     if (fuerzaReal > maxCompresion) { maxCompresion = fuerzaReal; txtMaxComp.Text = maxCompresion.ToString("F1"); }
                     if (fuerzaReal < maxExpansion) { maxExpansion = fuerzaReal; txtMaxExpa.Text = maxExpansion.ToString("F1"); }
 
-                    // Buffer Circular
                     bufferTiempo.Add(tiempoActual);
                     bufferPos.Add(posReal);
                     bufferFuerza.Add(fuerzaReal);
@@ -136,7 +141,6 @@ namespace SagaIngenieria
                     }
                 }
 
-                // GRABACIÓN
                 if (_grabando)
                 {
                     _ensayoGrabado.Add(new PuntoDeEnsayo
@@ -148,30 +152,25 @@ namespace SagaIngenieria
                     });
                 }
 
-                // Refrescar Gráfico
                 if (!_viendoHistorial) ActualizarGrafico();
             });
         }
 
-        // --- CEREBRO GRÁFICO MEJORADO ---
         private void ActualizarGrafico()
         {
             GraficoPrincipal.Plot.Clear();
 
-            // Colores Neon distintivos
-            var colorFuerza = ScottPlot.Color.FromHex("#FF4081"); // Rosa
-            var colorPos = ScottPlot.Color.FromHex("#00E5FF");    // Cyan
-            var colorVel = ScottPlot.Color.FromHex("#B2FF59");    // Verde
-            var colorHistorial = ScottPlot.Color.FromHex("#FFD700"); // Oro
+            var colorFuerza = ScottPlot.Color.FromHex("#FF4081");
+            var colorPos = ScottPlot.Color.FromHex("#00E5FF");
+            var colorVel = ScottPlot.Color.FromHex("#B2FF59");
+            var colorHistorial = ScottPlot.Color.FromHex("#FFD700");
 
-            // 1. SELECCIÓN DE DATOS (¿Vivo o Memoria?)
             double[] datosX = null;
             double[] datosY = null;
-            double[] datosY2 = null; // Para gráficos dobles
+            double[] datosY2 = null;
 
             if (_viendoHistorial)
             {
-                // Usamos los datos cargados del archivo
                 if (_ensayoCargado.Count == 0) return;
 
                 switch (_modoGrafico)
@@ -185,7 +184,7 @@ namespace SagaIngenieria
                         datosY = _ensayoCargado.Select(p => p.Fuerza).ToArray();
                         break;
                     case "FDvsT":
-                        datosX = _ensayoCargado.Select(p => p.Tiempo).ToArray(); // Eje X es tiempo
+                        datosX = _ensayoCargado.Select(p => p.Tiempo).ToArray();
                         datosY = _ensayoCargado.Select(p => p.Fuerza).ToArray();
                         datosY2 = _ensayoCargado.Select(p => p.Posicion).ToArray();
                         break;
@@ -195,7 +194,6 @@ namespace SagaIngenieria
                         datosY2 = _ensayoCargado.Select(p => p.Velocidad).ToArray();
                         break;
                     case "PicoVsV":
-                        // Para picos usamos scatter simple por ahora
                         datosX = _ensayoCargado.Select(p => p.Velocidad).ToArray();
                         datosY = _ensayoCargado.Select(p => p.Fuerza).ToArray();
                         break;
@@ -203,25 +201,21 @@ namespace SagaIngenieria
             }
             else
             {
-                // Usamos el buffer en vivo
                 switch (_modoGrafico)
                 {
                     case "FvsD": datosX = bufferPos.ToArray(); datosY = bufferFuerza.ToArray(); break;
                     case "FvsV": datosX = bufferVel.ToArray(); datosY = bufferFuerza.ToArray(); break;
-                    case "FDvsT": datosY = bufferFuerza.ToArray(); datosY2 = bufferPos.ToArray(); break; // Signal plot no usa X
+                    case "FDvsT": datosY = bufferFuerza.ToArray(); datosY2 = bufferPos.ToArray(); break;
                     case "FVvsT": datosY = bufferFuerza.ToArray(); datosY2 = bufferVel.ToArray(); break;
                     case "PicoVsV": datosX = bufferVel.ToArray(); datosY = bufferFuerza.ToArray(); break;
                 }
             }
 
-            // 2. DIBUJADO SEGÚN TIPO
-            // Aquí unificamos la lógica: no importa si es vivo o grabado, se dibuja igual.
-
-            if (datosY == null && datosX == null) return; // Seguridad
+            if (datosY == null && datosX == null) return;
 
             switch (_modoGrafico)
             {
-                case "FvsD": // Scatter X-Y
+                case "FvsD":
                     var sp1 = GraficoPrincipal.Plot.Add.Scatter(datosX, datosY);
                     sp1.Color = _viendoHistorial ? colorHistorial : colorFuerza;
                     sp1.LineWidth = 2;
@@ -230,7 +224,7 @@ namespace SagaIngenieria
                     GraficoPrincipal.Plot.Title(_viendoHistorial ? "HISTORIAL: Ciclo de Histéresis" : "VIVO: Ciclo de Histéresis");
                     break;
 
-                case "FvsV": // Scatter X-Y
+                case "FvsV":
                     var sp2 = GraficoPrincipal.Plot.Add.Scatter(datosX, datosY);
                     sp2.Color = _viendoHistorial ? colorHistorial : colorVel;
                     sp2.LineWidth = 2;
@@ -239,17 +233,14 @@ namespace SagaIngenieria
                     GraficoPrincipal.Plot.Title("Análisis de Amortiguamiento");
                     break;
 
-                case "FDvsT": // Doble eje Y
-                    // Signal Plot es más rápido para series de tiempo
+                case "FDvsT":
                     if (_viendoHistorial)
                     {
-                        // En historial usamos Scatter porque el tiempo puede no ser uniforme si hay pausas
                         var s1 = GraficoPrincipal.Plot.Add.Scatter(datosX, datosY); s1.Color = colorFuerza; s1.Axes.YAxis = GraficoPrincipal.Plot.Axes.Left;
                         var s2 = GraficoPrincipal.Plot.Add.Scatter(datosX, datosY2); s2.Color = colorPos; s2.Axes.YAxis = GraficoPrincipal.Plot.Axes.Right;
                     }
                     else
                     {
-                        // En vivo usamos Signal
                         var s1 = GraficoPrincipal.Plot.Add.Signal(datosY); s1.Color = colorFuerza; s1.Axes.YAxis = GraficoPrincipal.Plot.Axes.Left;
                         var s2 = GraficoPrincipal.Plot.Add.Signal(datosY2); s2.Color = colorPos; s2.Axes.YAxis = GraficoPrincipal.Plot.Axes.Right;
                     }
@@ -258,7 +249,7 @@ namespace SagaIngenieria
                     GraficoPrincipal.Plot.Title("Dominio del Tiempo");
                     break;
 
-                case "FVvsT": // Doble eje Y
+                case "FVvsT":
                     if (_viendoHistorial)
                     {
                         var s1 = GraficoPrincipal.Plot.Add.Scatter(datosX, datosY); s1.Color = colorFuerza; s1.Axes.YAxis = GraficoPrincipal.Plot.Axes.Left;
@@ -287,14 +278,11 @@ namespace SagaIngenieria
             GraficoPrincipal.Refresh();
         }
 
-        // --- BOTONES ---
-
         private void CambiarGrafico_Checked(object sender, RoutedEventArgs e)
         {
             if (sender is RadioButton rb && rb.Tag != null)
             {
                 _modoGrafico = rb.Tag.ToString();
-                // Si estamos viendo historial, forzamos el redibujado al cambiar el botón
                 if (_viendoHistorial) ActualizarGrafico();
             }
         }
@@ -303,8 +291,9 @@ namespace SagaIngenieria
         {
             if (!_motorEncendido)
             {
-                // Si estaba viendo historial, vuelvo al modo vivo al prender motor
                 _viendoHistorial = false;
+                InfoBox.Visibility = Visibility.Collapsed; // Ocultamos la info de historial
+
                 _miSimulador.Iniciar();
                 _motorEncendido = true;
                 if (txtBtnMotor != null) txtBtnMotor.Text = "APAGAR";
@@ -329,7 +318,8 @@ namespace SagaIngenieria
         {
             _ensayoGrabado.Clear();
             _grabando = true;
-            _viendoHistorial = false; // Asegurar que vemos lo que grabamos
+            _viendoHistorial = false;
+            InfoBox.Visibility = Visibility.Collapsed;
 
             btnGrabar.IsEnabled = false;
             btnGrabar.Opacity = 0.5;
@@ -379,7 +369,7 @@ namespace SagaIngenieria
 
                     Dispatcher.Invoke(() =>
                     {
-                        MessageBox.Show($"¡Ensayo Guardado!\nPodrás ver todos los gráficos (FvsD, FvsV, etc) desde el Historial.");
+                        MessageBox.Show($"¡Ensayo Guardado!\nPodrás ver todos los gráficos desde el Historial.");
                         txtEstado.Text = "GUARDADO OK";
                         txtEstado.Foreground = new Media.SolidColorBrush(Media.Colors.LightGreen);
                     });
@@ -403,9 +393,9 @@ namespace SagaIngenieria
 
         private void btnNuevo_Click(object sender, RoutedEventArgs e)
         {
-            // Limpia todo y vuelve al modo VIVO
             _viendoHistorial = false;
             _ensayoCargado.Clear();
+            InfoBox.Visibility = Visibility.Collapsed; // Ocultamos la caja
 
             bufferTiempo.Clear();
             bufferPos.Clear();
@@ -431,11 +421,7 @@ namespace SagaIngenieria
         {
             try
             {
-                if (ensayo.DatosCrudos == null || ensayo.DatosCrudos.Length == 0)
-                {
-                    MessageBox.Show("Ensayo vacío.");
-                    return;
-                }
+                if (ensayo.DatosCrudos == null || ensayo.DatosCrudos.Length == 0) return;
 
                 string json = System.Text.Encoding.UTF8.GetString(ensayo.DatosCrudos);
                 if (string.IsNullOrWhiteSpace(json)) return;
@@ -444,18 +430,22 @@ namespace SagaIngenieria
 
                 if (puntosRecuperados != null && puntosRecuperados.Count > 0)
                 {
-                    // 1. CARGAMOS LA MEMORIA DE REPLAY
                     _ensayoCargado = puntosRecuperados;
-                    _viendoHistorial = true; // ¡ACTIVAMOS EL MODO HISTORIAL!
+                    _viendoHistorial = true;
 
-                    // 2. Restauramos valores pico del ensayo para mostrarlos en el panel
                     txtMaxComp.Text = ensayo.MaxCompresion.ToString("F1");
                     txtMaxExpa.Text = ensayo.MaxExpansion.ToString("F1");
 
-                    // 3. Dibujamos (Usando el gráfico que esté seleccionado actualmente en los botones)
+                    // --- ACTUALIZAMOS EL NUEVO INFO BOX ---
+                    InfoBox.Visibility = Visibility.Visible; // ¡Lo mostramos!
+                    lblCliente.Text = $"Cliente: {ensayo.Vehiculo?.Cliente?.Nombre ?? "N/A"}";
+                    lblVehiculo.Text = $"Vehículo: {ensayo.Vehiculo?.Modelo ?? "N/A"}";
+                    lblFecha.Text = $"Fecha: {ensayo.Fecha.ToShortDateString()} {ensayo.Fecha.ToShortTimeString()}";
+                    lblNotas.Text = string.IsNullOrEmpty(ensayo.Notas) ? "Sin notas" : ensayo.Notas;
+
                     ActualizarGrafico();
 
-                    txtEstado.Text = "VISUALIZANDO HISTORIAL (Use los botones de arriba para cambiar de gráfico)";
+                    txtEstado.Text = "VISUALIZANDO HISTORIAL";
                     txtEstado.Foreground = new Media.SolidColorBrush(Media.Colors.Cyan);
                 }
             }
