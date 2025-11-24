@@ -1,14 +1,17 @@
 ﻿using System;
-using System.Linq; // Necesario para ordenar y filtrar
+using System.Linq;
 using System.Windows;
-using Microsoft.EntityFrameworkCore; // Necesario para incluir datos relacionados (Cliente/Vehículo)
+using Microsoft.EntityFrameworkCore;
 
 namespace SagaIngenieria
 {
     public partial class VentanaHistorial : Window
     {
-        // Evento: Avisamos a la ventana principal que el usuario eligió algo
+        // Evento 1: Abrir para ver (Modo Replay)
         public event Action<Modelos.Ensayo> EnsayoSeleccionado;
+
+        // Evento 2: Usar de fondo (Modo Comparación) - NUEVO
+        public event Action<Modelos.Ensayo> EnsayoParaReferencia;
 
         public VentanaHistorial()
         {
@@ -22,9 +25,6 @@ namespace SagaIngenieria
             {
                 using (var db = new Modelos.SagaContext())
                 {
-                    // LEER DE LA BD:
-                    // Traemos los ensayos pero INCLUYENDO (.Include) los datos del vehículo y cliente
-                    // para que no salga vacío en la tabla. Ordenamos por fecha descendente (lo nuevo arriba).
                     var lista = db.Ensayos
                                   .Include(e => e.Vehiculo)
                                   .ThenInclude(v => v.Cliente)
@@ -42,34 +42,38 @@ namespace SagaIngenieria
 
         private void btnAbrir_Click(object sender, RoutedEventArgs e)
         {
-            // Verificamos si hay algo seleccionado en la tabla
             if (GridEnsayos.SelectedItem is Modelos.Ensayo ensayoElegido)
             {
-                // Disparamos el evento (avisamos a MainWindow)
                 EnsayoSeleccionado?.Invoke(ensayoElegido);
-
-                // Cerramos esta ventana
                 this.Close();
             }
-            else
+            else MessageBox.Show("Seleccione una fila.");
+        }
+
+        // NUEVA FUNCIÓN: COMPARAR
+        private void btnComparar_Click(object sender, RoutedEventArgs e)
+        {
+            if (GridEnsayos.SelectedItem is Modelos.Ensayo ensayoElegido)
             {
-                MessageBox.Show("Por favor, seleccione una fila primero.");
+                // Disparamos el evento de REFERENCIA
+                EnsayoParaReferencia?.Invoke(ensayoElegido);
+                this.Close();
             }
+            else MessageBox.Show("Seleccione una fila para usar de fondo.");
         }
 
         private void btnEliminar_Click(object sender, RoutedEventArgs e)
         {
             if (GridEnsayos.SelectedItem is Modelos.Ensayo ensayoElegido)
             {
-                if (MessageBox.Show("¿Seguro que deseas borrar este ensayo para siempre?", "Confirmar", MessageBoxButton.YesNo) == MessageBoxResult.Yes)
+                if (MessageBox.Show("¿Borrar ensayo?", "Confirmar", MessageBoxButton.YesNo) == MessageBoxResult.Yes)
                 {
                     using (var db = new Modelos.SagaContext())
                     {
-                        // Truco de EF Core para borrar por ID sin cargar todo de nuevo
                         db.Ensayos.Remove(ensayoElegido);
                         db.SaveChanges();
                     }
-                    CargarDatos(); // Recargar la tabla
+                    CargarDatos();
                 }
             }
         }

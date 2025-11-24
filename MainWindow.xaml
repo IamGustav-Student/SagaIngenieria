@@ -5,11 +5,15 @@
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         xmlns:scott="clr-namespace:ScottPlot.WPF;assembly=ScottPlot.WPF"
         mc:Ignorable="d"
-        Title="SAGA Ingeniería - Banco de Pruebas v2.0" Height="768" Width="1366"
-        Background="#121212" WindowState="Maximized" WindowStyle="None" ResizeMode="CanResize">
+        Title="SAGA Ingeniería v2.0" Height="768" Width="1366"
+        Background="#121212" WindowState="Normal" WindowStyle="None" ResizeMode="CanResize">
+
+    <WindowChrome.WindowChrome>
+        <WindowChrome CaptionHeight="50" ResizeBorderThickness="5" GlassFrameThickness="0" CornerRadius="0"/>
+    </WindowChrome.WindowChrome>
 
     <Window.Resources>
-        <!-- Estilo botones menú -->
+        <!-- Estilos (Mismos de siempre) -->
         <Style x:Key="MenuButtonStyle" TargetType="Button">
             <Setter Property="Background" Value="Transparent"/>
             <Setter Property="Foreground" Value="#DDDDDD"/>
@@ -18,6 +22,7 @@
             <Setter Property="FontWeight" Value="SemiBold"/>
             <Setter Property="Margin" Value="5,0"/>
             <Setter Property="Padding" Value="10,5"/>
+            <Setter Property="WindowChrome.IsHitTestVisibleInChrome" Value="True"/>
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="Button">
@@ -34,7 +39,30 @@
             </Setter>
         </Style>
 
-        <!-- Estilo Tabs Gráfico -->
+        <Style x:Key="WindowControlBtn" TargetType="Button">
+            <Setter Property="Width" Value="45"/>
+            <Setter Property="Height" Value="30"/>
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="Foreground" Value="#AAA"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="WindowChrome.IsHitTestVisibleInChrome" Value="True"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border Background="{TemplateBinding Background}">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter Property="Background" Value="#333"/>
+                                <Setter Property="Foreground" Value="White"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
         <Style x:Key="GraphToggleStyle" TargetType="RadioButton">
             <Setter Property="Template">
                 <Setter.Value>
@@ -53,35 +81,42 @@
                 </Setter.Value>
             </Setter>
         </Style>
+
+        <Style TargetType="ProgressBar">
+            <Setter Property="Height" Value="6"/>
+            <Setter Property="Background" Value="#333"/>
+            <Setter Property="BorderThickness" Value="0"/>
+        </Style>
+
+        <Style TargetType="TextBox">
+            <Setter Property="Background" Value="#333"/>
+            <Setter Property="Foreground" Value="White"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="Padding" Value="5"/>
+            <Setter Property="FontSize" Value="12"/>
+        </Style>
     </Window.Resources>
 
     <Grid>
         <Grid.RowDefinitions>
             <RowDefinition Height="50"/>
-            <!-- Barra Superior -->
             <RowDefinition Height="*"/>
-            <!-- Área de Trabajo -->
         </Grid.RowDefinitions>
 
         <!-- 1. BARRA SUPERIOR -->
-        <Border Grid.Row="0" Background="#1F1F1F" BorderBrush="#333" BorderThickness="0,0,0,1" MouseLeftButtonDown="Border_MouseLeftButtonDown">
+        <Border Grid.Row="0" Background="#1F1F1F" BorderBrush="#333" BorderThickness="0,0,0,1">
             <Grid>
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="Auto"/>
-                    <!-- Logo -->
                     <ColumnDefinition Width="*"/>
-                    <!-- Botones Gestión -->
                     <ColumnDefinition Width="Auto"/>
-                    <!-- Botón Salir -->
                 </Grid.ColumnDefinitions>
 
-                <!-- Logo -->
                 <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="15,0">
                     <TextBlock Text="SAGA" Foreground="White" FontWeight="Black" FontSize="20"/>
                     <TextBlock Text="INGENIERÍA" Foreground="#00E5FF" FontWeight="Light" FontSize="20" Margin="5,0,0,0"/>
                 </StackPanel>
 
-                <!-- Gestión -->
                 <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center" Margin="20,0">
                     <Button x:Name="btnNuevo" Click="btnNuevo_Click" Style="{StaticResource MenuButtonStyle}">
                         <StackPanel Orientation="Horizontal">
@@ -99,76 +134,108 @@
                     <Button x:Name="btnCalibrarCero" Click="btnCalibrarCero_Click" Style="{StaticResource MenuButtonStyle}">
                         <StackPanel Orientation="Horizontal">
                             <TextBlock Text="⚖" Margin="0,0,8,0"/>
-                            <TextBlock Text="CALIBRAR (Tare)"/>
+                            <TextBlock Text="CALIBRAR"/>
                         </StackPanel>
                     </Button>
                 </StackPanel>
 
-                <!-- BOTÓN SALIR -->
-                <Button Grid.Column="2" Click="btnSalir_Click" Width="50" Height="50" Background="Transparent" BorderThickness="0">
-                    <Button.Template>
-                        <ControlTemplate TargetType="Button">
-                            <Border x:Name="bdrExit" Background="Transparent">
-                                <TextBlock Text="⏻" FontSize="24" Foreground="#FF5252" HorizontalAlignment="Center" VerticalAlignment="Center"/>
-                            </Border>
-                            <ControlTemplate.Triggers>
-                                <Trigger Property="IsMouseOver" Value="True">
-                                    <Setter TargetName="bdrExit" Property="Background" Value="#D32F2F"/>
-                                    <Setter Property="Foreground" Value="White"/>
-                                </Trigger>
-                            </ControlTemplate.Triggers>
-                        </ControlTemplate>
-                    </Button.Template>
-                </Button>
+                <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Top" HorizontalAlignment="Right">
+                    <Button Click="btnMinimizar_Click" Content="—" Style="{StaticResource WindowControlBtn}"/>
+                    <Button Click="btnMaximizar_Click" Content="▢" Style="{StaticResource WindowControlBtn}"/>
+                    <Button Click="btnSalir_Click" Content="✕" Style="{StaticResource WindowControlBtn}" Foreground="#FF5252"/>
+                </StackPanel>
             </Grid>
         </Border>
 
         <!-- 2. ÁREA PRINCIPAL -->
         <Grid Grid.Row="1">
             <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="260"/>
-                <!-- Panel Izquierdo -->
+                <ColumnDefinition Width="280"/>
                 <ColumnDefinition Width="*"/>
-                <!-- Gráfico Central -->
-                <ColumnDefinition Width="220"/>
-                <!-- Panel Derecho -->
+                <ColumnDefinition Width="240"/>
             </Grid.ColumnDefinitions>
 
             <!-- PANEL IZQUIERDO -->
             <Border Grid.Column="0" Background="#252526" BorderBrush="#333" BorderThickness="0,0,1,0">
-                <StackPanel Margin="15">
-                    <TextBlock Text="CONTROL DE MÁQUINA" Foreground="#888" FontWeight="Bold" Margin="0,0,0,15"/>
+                <ScrollViewer VerticalScrollBarVisibility="Auto">
+                    <StackPanel Margin="15">
+                        <TextBlock Text="CONTROL DE MÁQUINA" Foreground="#888" FontWeight="Bold" Margin="0,0,0,15"/>
 
-                    <!-- CORRECCIÓN 1: Botón Motor Simplificado (Sin Template complejo para que C# lo vea) -->
-                    <Button x:Name="btnMotor" Click="btnMotor_Click" Height="60" Background="#333" Margin="0,0,0,10" BorderThickness="0">
-                        <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" VerticalAlignment="Center">
-                            <TextBlock Text="⚡" FontSize="24" Foreground="Yellow" Margin="0,0,10,0"/>
-                            <TextBlock x:Name="txtBtnMotor" Text="ENCENDER" Foreground="White" FontWeight="Bold" FontSize="16"/>
-                        </StackPanel>
-                    </Button>
-
-                    <Rectangle Height="1" Fill="#444" Margin="0,10,0,10"/>
-
-                    <Button x:Name="btnGrabar" Click="btnGrabar_Click" IsEnabled="False" Height="50" Margin="0,0,0,10" Background="Transparent" BorderThickness="0">
-                        <Border Background="#2D2D30" CornerRadius="5" BorderBrush="#D32F2F" BorderThickness="1" HorizontalAlignment="Center" VerticalAlignment="Center">
-                            <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" VerticalAlignment="Center" Width="118">
-                                <TextBlock Text="🔴" FontSize="16" Margin="0,0,10,0" TextAlignment="Center" VerticalAlignment="Center" HorizontalAlignment="Center"/>
-                                <TextBlock Text="GRABAR REC" Foreground="#FF5252" FontWeight="Bold" TextAlignment="Center" VerticalAlignment="Center" Width="86" HorizontalAlignment="Center"/>
-                            </StackPanel>
-                        </Border>
-                    </Button>
-
-                    <Button x:Name="btnGuardar" Click="btnGuardar_Click" IsEnabled="False" Height="50" Background="Transparent" BorderThickness="0">
-                        <Border Background="#2D2D30" CornerRadius="5" BorderBrush="#2196F3" BorderThickness="1" Width="120">
+                        <Button x:Name="btnMotor" Click="btnMotor_Click" Height="60" Background="#333" Margin="0,0,0,10" BorderThickness="0">
                             <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" VerticalAlignment="Center">
-                                <TextBlock Text="💾" FontSize="16" Margin="0,0,10,0" TextAlignment="Center" HorizontalAlignment="Center" VerticalAlignment="Center"/>
-                                <TextBlock Text="GUARDAR" Foreground="#448AFF" FontWeight="Bold" TextAlignment="Center" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                <TextBlock Text="⚡" FontSize="24" Foreground="Yellow" Margin="0,0,10,0"/>
+                                <TextBlock x:Name="txtBtnMotor" Text="ENCENDER" Foreground="White" FontWeight="Bold" FontSize="16"/>
+                            </StackPanel>
+                        </Button>
+
+                        <Rectangle Height="1" Fill="#444" Margin="0,10,0,10"/>
+
+                        <Button x:Name="btnGrabar" Click="btnGrabar_Click" IsEnabled="False" Height="50" Margin="0,0,0,10" Background="Transparent" BorderThickness="0">
+                            <Border Background="#2D2D30" CornerRadius="5" BorderBrush="#D32F2F" BorderThickness="1">
+                                <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" VerticalAlignment="Center">
+                                    <TextBlock Text="🔴" FontSize="16" Margin="0,0,10,0"/>
+                                    <TextBlock Text="GRABAR REC" Foreground="#FF5252" FontWeight="Bold"/>
+                                </StackPanel>
+                            </Border>
+                        </Button>
+                        <Button x:Name="btnGuardar" Click="btnGuardar_Click" IsEnabled="False" Height="50" Background="Transparent" BorderThickness="0">
+                            <Border Background="#2D2D30" CornerRadius="5" BorderBrush="#2196F3" BorderThickness="1">
+                                <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" VerticalAlignment="Center">
+                                    <TextBlock Text="⏹" FontSize="16" Margin="0,0,10,0"/>
+                                    <TextBlock Text="DETENER Y EDITAR" Foreground="#448AFF" FontWeight="Bold"/>
+                                </StackPanel>
+                            </Border>
+                        </Button>
+
+                        <Border x:Name="PanelGuardado" Visibility="Collapsed" Background="#1E1E1E" BorderBrush="#448AFF" BorderThickness="1" CornerRadius="5" Margin="0,15,0,0" Padding="10">
+                            <StackPanel>
+                                <TextBlock Text="DATOS DEL ENSAYO" Foreground="#448AFF" FontWeight="Bold" Margin="0,0,0,10" HorizontalAlignment="Center"/>
+                                <TextBlock Text="Cliente:" Foreground="Gray" FontSize="11" Margin="0,0,0,2"/>
+                                <TextBox x:Name="txtInputCliente" Text="Juan Perez"/>
+                                <TextBlock Text="Vehículo:" Foreground="Gray" FontSize="11" Margin="0,5,0,2"/>
+                                <TextBox x:Name="txtInputVehiculo" Text="Fiat 600 Competición"/>
+                                <TextBlock Text="Notas:" Foreground="Gray" FontSize="11" Margin="0,5,0,2"/>
+                                <TextBox x:Name="txtInputNotas" Height="60" TextWrapping="Wrap" AcceptsReturn="True" Text="Prueba de rutina..."/>
+                                <Grid Margin="0,15,0,0">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition/>
+                                        <ColumnDefinition/>
+                                    </Grid.ColumnDefinitions>
+                                    <Button Click="btnCancelarGuardado_Click" Background="#444" Height="35" Margin="0,0,5,0" Content="DESCARTAR" Foreground="White" BorderThickness="0"/>
+                                    <Button Click="btnConfirmarGuardado_Click" Grid.Column="1" Background="#00E676" Height="35" Margin="5,0,0,0" Content="CONFIRMAR" FontWeight="Bold" BorderThickness="0"/>
+                                </Grid>
                             </StackPanel>
                         </Border>
-                    </Button>
 
-                    <TextBlock x:Name="txtEstado" Text="Listo." Foreground="Gray" Margin="0,20,0,0" TextWrapping="Wrap" HorizontalAlignment="Center" TextAlignment="Center"/>
-                </StackPanel>
+                        <TextBlock x:Name="txtEstado" Text="Listo." Foreground="Gray" Margin="0,20,0,20" TextWrapping="Wrap" HorizontalAlignment="Center" TextAlignment="Center"/>
+
+                        <Border Background="#1E1E1E" CornerRadius="5" Padding="10" Margin="0,10,0,0" BorderBrush="#333" BorderThickness="1">
+                            <StackPanel>
+                                <TextBlock Text="ESTADO DE SESIÓN" Foreground="Gray" FontSize="10" FontWeight="Bold" Margin="0,0,0,10"/>
+
+                                <Grid Margin="0,0,0,10">
+                                    <TextBlock Text="DURACIÓN:" Foreground="#888"/>
+                                    <TextBlock x:Name="txtCrono" Text="00:00:00" Foreground="White" HorizontalAlignment="Right" FontFamily="Consolas" FontWeight="Bold"/>
+                                </Grid>
+
+                                <Grid Margin="0,0,0,10">
+                                    <TextBlock Text="CICLOS:" Foreground="#888"/>
+                                    <TextBlock x:Name="txtCiclos" Text="0" Foreground="#00E5FF" HorizontalAlignment="Right" FontWeight="Bold"/>
+                                </Grid>
+
+                                <TextBlock Text="TEMP. ACEITE" Foreground="#888" FontSize="10" Margin="0,5,0,2"/>
+                                <Grid>
+                                    <ProgressBar Value="45" Maximum="100" Height="10" Foreground="#FF9800" Background="#333"/>
+                                    <TextBlock x:Name="txtTemp" Text="45°C" Foreground="White" FontSize="10" HorizontalAlignment="Center" VerticalAlignment="Center" Margin="0,-1,0,0">
+                                        <TextBlock.Effect>
+                                            <DropShadowEffect ShadowDepth="0" Color="Black" BlurRadius="2"/>
+                                        </TextBlock.Effect>
+                                    </TextBlock>
+                                </Grid>
+                            </StackPanel>
+                        </Border>
+                    </StackPanel>
+                </ScrollViewer>
             </Border>
 
             <!-- ZONA CENTRAL -->
@@ -179,54 +246,70 @@
                     <RowDefinition Height="Auto"/>
                 </Grid.RowDefinitions>
 
-                <!-- Tabs -->
                 <Border Background="#1E1E1E" Padding="5">
                     <WrapPanel HorizontalAlignment="Center">
-                        <RadioButton Content="Fuerza vs Desp" GroupName="Graficos" Style="{StaticResource GraphToggleStyle}" Checked="CambiarGrafico_Checked" Tag="FvsD" IsChecked="True"/>
-                        <RadioButton Content="Fuerza vs Vel" GroupName="Graficos" Style="{StaticResource GraphToggleStyle}" Checked="CambiarGrafico_Checked" Tag="FvsV"/>
-                        <RadioButton Content="Fz + Desp vs T" GroupName="Graficos" Style="{StaticResource GraphToggleStyle}" Checked="CambiarGrafico_Checked" Tag="FDvsT"/>
-                        <RadioButton Content="Fz + Vel vs T" GroupName="Graficos" Style="{StaticResource GraphToggleStyle}" Checked="CambiarGrafico_Checked" Tag="FVvsT"/>
-                        <RadioButton Content="Fz Pico vs Vel" GroupName="Graficos" Style="{StaticResource GraphToggleStyle}" Checked="CambiarGrafico_Checked" Tag="PicoVsV"/>
+                        <RadioButton Content="Fz vs Desp" GroupName="Graficos" Style="{StaticResource GraphToggleStyle}" Checked="CambiarGrafico_Checked" Tag="FvsD" IsChecked="True"/>
+                        <RadioButton Content="Fz vs Vel" GroupName="Graficos" Style="{StaticResource GraphToggleStyle}" Checked="CambiarGrafico_Checked" Tag="FvsV"/>
+                        <RadioButton Content="Fz Prom vs Vel" GroupName="Graficos" Style="{StaticResource GraphToggleStyle}" Checked="CambiarGrafico_Checked" Tag="FPromVsV"/>
+                        <RadioButton Content="Tiempo" GroupName="Graficos" Style="{StaticResource GraphToggleStyle}" Checked="CambiarGrafico_Checked" Tag="FDvsT"/>
+                        <RadioButton Content="Fase" GroupName="Graficos" Style="{StaticResource GraphToggleStyle}" Checked="CambiarGrafico_Checked" Tag="FVvsT"/>
+                        <RadioButton Content="Picos" GroupName="Graficos" Style="{StaticResource GraphToggleStyle}" Checked="CambiarGrafico_Checked" Tag="PicoVsV"/>
                     </WrapPanel>
                 </Border>
 
-                <!-- Gráfico -->
                 <scott:WpfPlot x:Name="GraficoPrincipal" Grid.Row="1"/>
 
-                <!-- INFO BOX (Detalles del archivo) -->
-                <Border x:Name="InfoBox" Grid.Row="2" Background="#181818" BorderBrush="#333" BorderThickness="0,1,0,0" Padding="15,10" Visibility="Collapsed">
-                    <Grid>
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="Auto"/>
-                            <ColumnDefinition Width="*"/>
-                            <ColumnDefinition Width="Auto"/>
-                        </Grid.ColumnDefinitions>
+                <!-- ZONA DE INFORMACIÓN INFERIOR (STACKPANEL PARA APILAR REFERENCIA + INFO) -->
+                <StackPanel Grid.Row="2">
 
-                        <!-- Icono -->
-                        <Border Background="#333" Width="40" Height="40" CornerRadius="20" Margin="0,0,15,0">
-                            <TextBlock Text="📂" HorizontalAlignment="Center" VerticalAlignment="Center" FontSize="20"/>
-                        </Border>
-
-                        <!-- Datos Principales -->
-                        <StackPanel Grid.Column="1" VerticalAlignment="Center">
-                            <!-- CORRECCIÓN 2: CharacterSpacing en lugar de LetterSpacing -->
-                            <TextBlock Text="ARCHIVO CARGADO" Foreground="#00E5FF" FontSize="10" FontWeight="Bold" />
-                            <StackPanel Orientation="Horizontal" Margin="0,2,0,0">
-                                <TextBlock x:Name="lblCliente" Text="Cliente: Juan Perez" Foreground="White" FontWeight="Bold" Margin="0,0,15,0"/>
-                                <TextBlock Text="|" Foreground="#444" Margin="0,0,15,0"/>
-                                <TextBlock x:Name="lblVehiculo" Text="Vehículo: Fiat 600" Foreground="#DDD" Margin="0,0,15,0"/>
-                                <TextBlock Text="|" Foreground="#444" Margin="0,0,15,0"/>
-                                <TextBlock x:Name="lblFecha" Text="Fecha: 12/12/2023" Foreground="#AAA"/>
+                    <!-- 1. BARRA DE REFERENCIA (NUEVA) -->
+                    <Border x:Name="RefBox" Visibility="Collapsed" Background="#221F00" BorderBrush="#FFD700" BorderThickness="0,1,0,0" Padding="15,8">
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+                            <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                <TextBlock Text="REFERENCIA DE FONDO" Foreground="#FFD700" FontSize="10" FontWeight="Bold" Margin="0,0,15,0"/>
+                                <TextBlock x:Name="lblRefCliente" Text="Cliente: -" Foreground="#DDD" FontSize="11" Margin="0,0,10,0"/>
+                                <TextBlock Text="|" Foreground="#555" Margin="0,0,10,0"/>
+                                <TextBlock x:Name="lblRefVehiculo" Text="Vehículo: -" Foreground="#DDD" FontSize="11" Margin="0,0,10,0"/>
+                                <TextBlock Text="|" Foreground="#555" Margin="0,0,10,0"/>
+                                <TextBlock x:Name="lblRefFecha" Text="Fecha: -" Foreground="#AAA" FontSize="11"/>
                             </StackPanel>
-                        </StackPanel>
+                            <!-- Botón para quitar referencia -->
+                            <Button Grid.Column="1" Content="Quitar" Click="btnQuitarRef_Click" HorizontalAlignment="Right" Background="Transparent" Foreground="#FFD700" BorderThickness="0" FontSize="10" Cursor="Hand"/>
+                        </Grid>
+                    </Border>
 
-                        <!-- Notas -->
-                        <StackPanel Grid.Column="2" VerticalAlignment="Center" HorizontalAlignment="Right">
-                            <TextBlock Text="NOTAS DEL ENSAYO" Foreground="Gray" FontSize="10" HorizontalAlignment="Right"/>
-                            <TextBlock x:Name="lblNotas" Text="Prueba de dureza standard" Foreground="#CCC" FontStyle="Italic" HorizontalAlignment="Right" MaxWidth="300" TextTrimming="CharacterEllipsis"/>
-                        </StackPanel>
-                    </Grid>
-                </Border>
+                    <!-- 2. INFO BOX DEL ENSAYO PRINCIPAL -->
+                    <Border x:Name="InfoBox" Background="#181818" BorderBrush="#333" BorderThickness="0,1,0,0" Padding="15,10" Visibility="Collapsed">
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+                            <Border Background="#333" Width="40" Height="40" CornerRadius="20" Margin="0,0,15,0">
+                                <TextBlock Text="📂" HorizontalAlignment="Center" VerticalAlignment="Center" FontSize="20" Foreground="White"/>
+                            </Border>
+                            <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                                <TextBlock Text="ARCHIVO CARGADO" Foreground="#00E5FF" FontSize="10" FontWeight="Bold" />
+                                <StackPanel Orientation="Horizontal" Margin="0,2,0,0">
+                                    <TextBlock x:Name="lblCliente" Text="Cliente: -" Foreground="White" FontWeight="Bold" Margin="0,0,15,0"/>
+                                    <TextBlock Text="|" Foreground="#444" Margin="0,0,15,0"/>
+                                    <TextBlock x:Name="lblVehiculo" Text="Vehículo: -" Foreground="#DDD" Margin="0,0,15,0"/>
+                                    <TextBlock Text="|" Foreground="#444" Margin="0,0,15,0"/>
+                                    <TextBlock x:Name="lblFecha" Text="Fecha: -" Foreground="#AAA"/>
+                                </StackPanel>
+                            </StackPanel>
+                            <StackPanel Grid.Column="2" VerticalAlignment="Center" HorizontalAlignment="Right">
+                                <TextBlock Text="NOTAS DEL ENSAYO" Foreground="Gray" FontSize="10" HorizontalAlignment="Right"/>
+                                <TextBlock x:Name="lblNotas" Text="Sin notas" Foreground="#CCC" FontStyle="Italic" HorizontalAlignment="Right" MaxWidth="300" TextTrimming="CharacterEllipsis"/>
+                            </StackPanel>
+                        </Grid>
+                    </Border>
+                </StackPanel>
             </Grid>
 
             <!-- PANEL DERECHO -->
@@ -237,6 +320,9 @@
                     <Border Background="#252526" CornerRadius="5" Padding="10" Margin="0,0,0,10">
                         <StackPanel>
                             <TextBlock Text="FUERZA (kg)" Foreground="#888" FontSize="11"/>
+                            <Grid Margin="0,5">
+                                <ProgressBar x:Name="barFuerza" Value="0" Maximum="200" Foreground="#FF4081" Height="4"/>
+                            </Grid>
                             <TextBlock x:Name="txtFuerza" Text="0.0" Foreground="#FF4081" FontSize="28" FontWeight="Bold" HorizontalAlignment="Right"/>
                         </StackPanel>
                     </Border>
@@ -244,6 +330,9 @@
                     <Border Background="#252526" CornerRadius="5" Padding="10" Margin="0,0,0,10">
                         <StackPanel>
                             <TextBlock Text="POSICIÓN (mm)" Foreground="#888" FontSize="11"/>
+                            <Grid Margin="0,5">
+                                <ProgressBar x:Name="barPosicion" Value="0" Maximum="100" Foreground="#00E5FF" Height="4"/>
+                            </Grid>
                             <TextBlock x:Name="txtPosicion" Text="0.0" Foreground="#00E5FF" FontSize="28" FontWeight="Bold" HorizontalAlignment="Right"/>
                         </StackPanel>
                     </Border>
@@ -251,7 +340,30 @@
                     <Border Background="#252526" CornerRadius="5" Padding="10" Margin="0,0,0,20">
                         <StackPanel>
                             <TextBlock Text="VELOCIDAD (mm/s)" Foreground="#888" FontSize="11"/>
+                            <Grid Margin="0,5">
+                                <ProgressBar x:Name="barVelocidad" Value="0" Maximum="1000" Foreground="#B2FF59" Height="4"/>
+                            </Grid>
                             <TextBlock x:Name="txtVelocidad" Text="0.0" Foreground="#B2FF59" FontSize="28" FontWeight="Bold" HorizontalAlignment="Right"/>
+                        </StackPanel>
+                    </Border>
+
+                    <Border Background="#252526" CornerRadius="5" Padding="10" Margin="0,0,0,20" BorderBrush="#333" BorderThickness="1">
+                        <StackPanel>
+                            <TextBlock Text="DINÁMICA" Foreground="Gray" FontSize="10" Margin="0,0,0,5"/>
+                            <Grid Margin="0,0,0,5">
+                                <TextBlock Text="FRECUENCIA:" Foreground="#DDD" FontSize="11"/>
+                                <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+                                    <TextBlock x:Name="txtFreq" Text="0.0" Foreground="White" FontWeight="Bold"/>
+                                    <TextBlock Text=" Hz" Foreground="Gray" FontSize="10" VerticalAlignment="Bottom"/>
+                                </StackPanel>
+                            </Grid>
+                            <Grid>
+                                <TextBlock Text="AMPLITUD:" Foreground="#DDD" FontSize="11"/>
+                                <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+                                    <TextBlock x:Name="txtAmp" Text="0" Foreground="White" FontWeight="Bold"/>
+                                    <TextBlock Text=" mm" Foreground="Gray" FontSize="10" VerticalAlignment="Bottom"/>
+                                </StackPanel>
+                            </Grid>
                         </StackPanel>
                     </Border>
 
