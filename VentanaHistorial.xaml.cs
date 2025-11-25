@@ -7,10 +7,12 @@ namespace SagaIngenieria
 {
     public partial class VentanaHistorial : Window
     {
-        // Evento 1: Abrir para ver (Modo Replay)
+        // --- EVENTOS PÚBLICOS (Los enchufes que faltaban) ---
+
+        // Evento 1: Cuando el usuario quiere ABRIR un ensayo (Replay)
         public event Action<Modelos.Ensayo> EnsayoSeleccionado;
 
-        // Evento 2: Usar de fondo (Modo Comparación) - NUEVO
+        // Evento 2: Cuando el usuario quiere usarlo de FONDO (Comparar)
         public event Action<Modelos.Ensayo> EnsayoParaReferencia;
 
         public VentanaHistorial()
@@ -25,6 +27,7 @@ namespace SagaIngenieria
             {
                 using (var db = new Modelos.SagaContext())
                 {
+                    // Traemos los datos incluyendo las relaciones (Join)
                     var lista = db.Ensayos
                                   .Include(e => e.Vehiculo)
                                   .ThenInclude(v => v.Cliente)
@@ -40,40 +43,49 @@ namespace SagaIngenieria
             }
         }
 
+        // Botón "ABRIR GRÁFICO"
         private void btnAbrir_Click(object sender, RoutedEventArgs e)
         {
             if (GridEnsayos.SelectedItem is Modelos.Ensayo ensayoElegido)
             {
+                // Avisamos a MainWindow que cargue este ensayo
                 EnsayoSeleccionado?.Invoke(ensayoElegido);
                 this.Close();
             }
-            else MessageBox.Show("Seleccione una fila.");
+            else
+            {
+                MessageBox.Show("Por favor, seleccione una fila primero.");
+            }
         }
 
-        // NUEVA FUNCIÓN: COMPARAR
+        // Botón "USAR DE FONDO"
         private void btnComparar_Click(object sender, RoutedEventArgs e)
         {
             if (GridEnsayos.SelectedItem is Modelos.Ensayo ensayoElegido)
             {
-                // Disparamos el evento de REFERENCIA
+                // Avisamos a MainWindow que use este ensayo como referencia gris
                 EnsayoParaReferencia?.Invoke(ensayoElegido);
                 this.Close();
             }
-            else MessageBox.Show("Seleccione una fila para usar de fondo.");
+            else
+            {
+                MessageBox.Show("Por favor, seleccione una fila primero.");
+            }
         }
 
+        // Botón "ELIMINAR"
         private void btnEliminar_Click(object sender, RoutedEventArgs e)
         {
             if (GridEnsayos.SelectedItem is Modelos.Ensayo ensayoElegido)
             {
-                if (MessageBox.Show("¿Borrar ensayo?", "Confirmar", MessageBoxButton.YesNo) == MessageBoxResult.Yes)
+                if (MessageBox.Show("¿Seguro que deseas borrar este ensayo para siempre?", "Confirmar", MessageBoxButton.YesNo) == MessageBoxResult.Yes)
                 {
                     using (var db = new Modelos.SagaContext())
                     {
                         db.Ensayos.Remove(ensayoElegido);
                         db.SaveChanges();
                     }
-                    CargarDatos();
+                    CargarDatos(); // Recargamos la tabla
                 }
             }
         }
