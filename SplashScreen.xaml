@@ -19,8 +19,10 @@
                 <RowDefinition Height="Auto"/>
             </Grid.RowDefinitions>
 
+
             <!-- CONTENIDO CENTRAL -->
             <StackPanel Grid.Row="0" VerticalAlignment="Center" HorizontalAlignment="Center">
+
                 <!-- Logo (Texto Simulado) -->
                 <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" Margin="0,0,0,20">
                     <TextBlock Text="SAGA" Foreground="White" FontSize="48" FontWeight="Black" FontFamily="Segoe UI">
@@ -36,14 +38,16 @@
 
             <!-- PIE: BARRA DE CARGA Y TEXTO -->
             <StackPanel Grid.Row="1" Margin="40,0,40,30">
+
                 <Grid Margin="0,0,0,10">
                     <TextBlock Text="Iniciando motores..." Foreground="#666" FontSize="12" HorizontalAlignment="Left"/>
-                    <TextBlock Text="© 2025 SAGA Dev Team" Foreground="#444" FontSize="12" HorizontalAlignment="Right"/>
+                    <TextBlock Text="© 2025 GSO Dev Team" Foreground="#444" FontSize="12" HorizontalAlignment="Right"/>
                 </Grid>
 
                 <!-- Barra de Carga Indeterminada (Animada) -->
                 <ProgressBar IsIndeterminate="True" Height="4" Background="#222" BorderThickness="0" Foreground="#00E5FF"/>
             </StackPanel>
         </Grid>
+
     </Border>
 </Window>

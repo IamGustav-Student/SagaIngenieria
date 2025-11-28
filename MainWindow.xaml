@@ -67,14 +67,25 @@
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="RadioButton">
-                        <Border x:Name="bdr" Background="#2D2D30" BorderBrush="#444" BorderThickness="1" Margin="2" CornerRadius="3" Padding="10,6">
-                            <TextBlock Text="{TemplateBinding Content}" Foreground="Gray" FontWeight="Bold" HorizontalAlignment="Center"/>
+                        <Border x:Name="bdr" 
+                                Background="#FF3FA0A0" 
+                                BorderBrush="#444" 
+                                BorderThickness="1" 
+                                Margin="2" 
+                                CornerRadius="3" 
+                                Padding="10,6">
+                            <ContentPresenter HorizontalAlignment="Center" 
+                                              VerticalAlignment="Center" 
+                                              RecognizesAccessKey="True"/>
                         </Border>
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsChecked" Value="True">
                                 <Setter TargetName="bdr" Property="Background" Value="#007ACC"/>
                                 <Setter TargetName="bdr" Property="BorderBrush" Value="#009EFF"/>
                                 <Setter Property="Foreground" Value="White"/>
+                            </Trigger>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="bdr" Property="Background" Value="#3E3E42"/>
                             </Trigger>
                         </ControlTemplate.Triggers>
                     </ControlTemplate>
@@ -111,8 +122,11 @@
                     <ColumnDefinition Width="*"/>
                     <ColumnDefinition Width="Auto"/>
                 </Grid.ColumnDefinitions>
+                <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="15,0">
+                </StackPanel>
 
                 <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="15,0">
+                    <Image Source="/Imagenes/Logo_GSO.png" Height="30" Width="49" HorizontalAlignment="Left" VerticalAlignment="Center"/>
                     <TextBlock Text="SAGA" Foreground="White" FontWeight="Black" FontSize="20"/>
                     <TextBlock Text="INGENIERÍA" Foreground="#00E5FF" FontWeight="Light" FontSize="20" Margin="5,0,0,0"/>
                 </StackPanel>
@@ -174,6 +188,38 @@
             <Border Grid.Column="0" Background="#252526" BorderBrush="#333" BorderThickness="0,0,1,0">
                 <ScrollViewer VerticalScrollBarVisibility="Auto">
                     <StackPanel Margin="15">
+                        <TextBlock Text="CONFIGURACIÓN E/S" Foreground="#888" FontWeight="Bold" Margin="0,0,0,10"/>
+
+                        <CheckBox x:Name="chkModoReal" Content="USAR MÁQUINA REAL" 
+                                  Checked="chkModoReal_Checked" Unchecked="chkModoReal_Checked"
+                                  Foreground="White" FontWeight="SemiBold" Margin="0,0,0,10">
+                            <CheckBox.LayoutTransform>
+                                <ScaleTransform ScaleX="1.1" ScaleY="1.1"/>
+                            </CheckBox.LayoutTransform>
+                        </CheckBox>
+
+                        <StackPanel x:Name="PanelPuertos" Visibility="Collapsed" Margin="0,0,0,15">
+                            <TextBlock Text="PUERTO COM:" Foreground="Gray" FontSize="10" Margin="0,0,0,2"/>
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                </Grid.ColumnDefinitions>
+                                <ComboBox x:Name="cmbPuertos" Margin="0,0,5,0"
+                                          HorizontalContentAlignment="Center"
+                                          VerticalContentAlignment="Center"
+                                          Background="#333" Foreground="Black" BorderThickness="0" 
+                                          Padding="5,0" VerticalAlignment="Center" Height="30"/>
+                                <Button x:Name="btnRefrescar" Content="↻" Width="30" Height="30" 
+                                        Click="btnRefrescar_Click"
+                                        Background="#444" Foreground="White" BorderThickness="0" HorizontalAlignment="Left" Margin="219,0,0,0"/>
+                            </Grid>
+
+                            <Button x:Name="btnConectar" Content="CONECTAR MÁQUINA" Click="btnConectar_Click"
+                                    Height="35" Margin="0,10,0,0" Background="#007ACC" Foreground="White" FontWeight="Bold" BorderThickness="0"/>
+                        </StackPanel>
+
+                        <Rectangle Height="1" Fill="#444" Margin="0,5,0,15"/>
                         <TextBlock Text="CONTROL DE MÁQUINA" Foreground="#888" FontWeight="Bold" Margin="0,0,0,15"/>
 
                         <Button x:Name="btnMotor" Click="btnMotor_Click" Height="60" Background="#333" Margin="0,0,0,10" BorderThickness="0">
@@ -185,7 +231,7 @@
 
                         <Rectangle Height="1" Fill="#444" Margin="0,10,0,10"/>
 
-                        <Button x:Name="btnGrabar" Click="btnGrabar_Click" IsEnabled="False" Height="50" Margin="0,0,0,10" Background="DarkGray"  BorderThickness="0">
+                        <Button x:Name="btnGrabar" Click="btnGrabar_Click" IsEnabled="False" Height="50" Margin="0,0,0,10" Background="#333"  BorderThickness="0">
                             <Border Background="#2D2D30" CornerRadius="5" BorderBrush="#D32F2F" BorderThickness="1" Width="160" Height="45">
                                 <StackPanel Orientation="Horizontal" Margin="-1,-1,-1,-1">
                                     <TextBlock Text="🔴" FontSize="16" Margin="0,0,10,0" TextAlignment="Center" VerticalAlignment="Center" Width="31"/>
@@ -193,7 +239,7 @@
                                 </StackPanel>
                             </Border>
                         </Button>
-                        <Button x:Name="btnGuardar" Click="btnGuardar_Click" IsEnabled="False" Height="50" Background="DarkGray" BorderThickness="0">
+                        <Button x:Name="btnGuardar" Click="btnGuardar_Click" IsEnabled="False" Height="50" Background="#333" BorderThickness="0">
                             <Border Background="#2D2D30" CornerRadius="5" BorderBrush="#2196F3" BorderThickness="1" Width="160" Height="45">
                                 <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" VerticalAlignment="Center" Height="37" Width="157">
                                     <TextBlock Text="⏹" FontSize="16" Margin="0,0,10,0" TextAlignment="Center" VerticalAlignment="Center" Width="31"/>
@@ -262,14 +308,71 @@
                 </Grid.RowDefinitions>
 
                 <Border Background="#1E1E1E" Padding="5">
-                    <WrapPanel HorizontalAlignment="Center">
-                        <RadioButton Content="Fz vs Desp" GroupName="Graficos" Style="{StaticResource GraphToggleStyle}" Checked="CambiarGrafico_Checked" Tag="FvsD" IsChecked="True"/>
-                        <RadioButton Content="Fz vs Vel" GroupName="Graficos" Style="{StaticResource GraphToggleStyle}" Checked="CambiarGrafico_Checked" Tag="FvsV"/>
-                        <RadioButton Content="Fz Prom vs Vel" GroupName="Graficos" Style="{StaticResource GraphToggleStyle}" Checked="CambiarGrafico_Checked" Tag="FPromVsV"/>
-                        <RadioButton Content="Tiempo" GroupName="Graficos" Style="{StaticResource GraphToggleStyle}" Checked="CambiarGrafico_Checked" Tag="FDvsT"/>
-                        <RadioButton Content="Fase" GroupName="Graficos" Style="{StaticResource GraphToggleStyle}" Checked="CambiarGrafico_Checked" Tag="FVvsT"/>
-                        <RadioButton Content="Picos" GroupName="Graficos" Style="{StaticResource GraphToggleStyle}" Checked="CambiarGrafico_Checked" Tag="PicoVsV"/>
-                    </WrapPanel>
+                    <Border Background="#1E1E1E" Padding="5">
+                        <WrapPanel HorizontalAlignment="Center">
+
+                            <RadioButton GroupName="Graficos" Style="{StaticResource GraphToggleStyle}" 
+                                     Checked="CambiarGrafico_Checked" Tag="FvsD" IsChecked="True" ToolTip="Fuerza vs Posición">
+                                <StackPanel Orientation="Horizontal">
+                                    <Path Data="M 8,22 C 8,5 24,5 24,22 C 24,39 8,39 8,22" 
+                                      Stroke="{Binding RelativeSource={RelativeSource AncestorType=RadioButton}, Path=Foreground}" 
+                                      StrokeThickness="2" Width="16" Height="16" Margin="0,0,8,0" Stretch="Uniform"/>
+                                    <TextBlock Text="HISTÉRESIS" FontWeight="Bold" VerticalAlignment="Center"/>
+                                </StackPanel>
+                            </RadioButton>
+
+                            <RadioButton GroupName="Graficos" Style="{StaticResource GraphToggleStyle}" 
+                                     Checked="CambiarGrafico_Checked" Tag="FvsV" ToolTip="Fuerza vs Velocidad">
+                                <StackPanel Orientation="Horizontal">
+                                    <Path Data="M 5,27 L 27,5 M 16,0 L 16,32 M 0,16 L 32,16" 
+                                      Stroke="{Binding RelativeSource={RelativeSource AncestorType=RadioButton}, Path=Foreground}" 
+                                      StrokeThickness="2" Width="16" Height="16" Margin="0,0,8,0" Stretch="Uniform"/>
+                                    <TextBlock Text="Fz vs VEL" FontWeight="Bold" VerticalAlignment="Center"/>
+                                </StackPanel>
+                            </RadioButton>
+
+                            <RadioButton GroupName="Graficos" Style="{StaticResource GraphToggleStyle}" 
+                                     Checked="CambiarGrafico_Checked" Tag="FPromVsV" ToolTip="Curva Promediada">
+                                <StackPanel Orientation="Horizontal">
+                                    <Path Data="M 2,28 Q 16,16 30,4" 
+                                      Stroke="{Binding RelativeSource={RelativeSource AncestorType=RadioButton}, Path=Foreground}" 
+                                      StrokeThickness="3" Width="16" Height="16" Margin="0,0,8,0" Stretch="Uniform"/>
+                                    <TextBlock Text="PROMEDIO" FontWeight="Bold" VerticalAlignment="Center"/>
+                                </StackPanel>
+                            </RadioButton>
+
+                            <RadioButton GroupName="Graficos" Style="{StaticResource GraphToggleStyle}" 
+                                     Checked="CambiarGrafico_Checked" Tag="FDvsT" ToolTip="Dominio del Tiempo">
+                                <StackPanel Orientation="Horizontal">
+                                    <Path Data="M 0,16 Q 8,0 16,16 T 32,16" 
+                                      Stroke="{Binding RelativeSource={RelativeSource AncestorType=RadioButton}, Path=Foreground}" 
+                                      StrokeThickness="2" Width="16" Height="16" Margin="0,0,8,0" Stretch="Uniform"/>
+                                    <TextBlock Text="TIEMPO" FontWeight="Bold" VerticalAlignment="Center"/>
+                                </StackPanel>
+                            </RadioButton>
+
+                            <RadioButton GroupName="Graficos" Style="{StaticResource GraphToggleStyle}" 
+                                     Checked="CambiarGrafico_Checked" Tag="FVvsT" ToolTip="Desfase Fz/Vel">
+                                <StackPanel Orientation="Horizontal">
+                                    <Path Data="M 16,2 A 14,14 0 1 1 16,30 A 14,14 0 1 1 16,2 M 16,16 L 26,6" 
+                                      Stroke="{Binding RelativeSource={RelativeSource AncestorType=RadioButton}, Path=Foreground}" 
+                                      StrokeThickness="2" Width="16" Height="16" Margin="0,0,8,0" Stretch="Uniform"/>
+                                    <TextBlock Text="FASE" FontWeight="Bold" VerticalAlignment="Center"/>
+                                </StackPanel>
+                            </RadioButton>
+
+                            <RadioButton GroupName="Graficos" Style="{StaticResource GraphToggleStyle}" 
+                                     Checked="CambiarGrafico_Checked" Tag="PicoVsV" ToolTip="Valores Máximos">
+                                <StackPanel Orientation="Horizontal">
+                                    <Path Data="M 2,30 L 16,2 L 30,30" 
+                                      Stroke="{Binding RelativeSource={RelativeSource AncestorType=RadioButton}, Path=Foreground}" 
+                                      StrokeThickness="2" Width="16" Height="16" Margin="0,0,8,0" Stretch="Uniform"/>
+                                    <TextBlock Text="PICOS" FontWeight="Bold" VerticalAlignment="Center"/>
+                                </StackPanel>
+                            </RadioButton>
+
+                        </WrapPanel>
+                    </Border>
                 </Border>
 
                 <scott:WpfPlot x:Name="GraficoPrincipal" Grid.Row="1"/>

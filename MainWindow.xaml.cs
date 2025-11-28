@@ -24,6 +24,11 @@ namespace SagaIngenieria
     {
         private Simulador _miSimulador = new Simulador();
 
+        // --- AGREGAR ESTO ---
+        private DriverMaquina _miDriver = new DriverMaquina();
+        private bool _usarMaquinaReal = false;
+        // --------------------
+
         List<double> bufferTiempo = new List<double>();
         List<double> bufferPos = new List<double>();
         List<double> bufferFuerza = new List<double>();
@@ -65,6 +70,11 @@ namespace SagaIngenieria
             InicializarBaseDeDatos();
             ConfigurarGraficoInicial();
             _miSimulador.NuevosDatosRecibidos += ProcesarDatosFisicos;
+            // --- AGREGAR ESTO ---
+            _miDriver.NuevosDatosRecibidos += ProcesarDatosFisicos; // Usamos la misma función gráfica :)
+            _miDriver.LogEstado += (msg) => Dispatcher.Invoke(() => txtEstado.Text = msg);
+            ActualizarListaPuertos();
+            // --------------------
         }
 
         // --- CONTROLES VENTANA ---
@@ -206,13 +216,116 @@ namespace SagaIngenieria
             });
         }
 
-        // ... (El resto del archivo sigue igual: CalcularCurvaPromedio, ActualizarGrafico, Botones, etc.)
-        // Copia el resto de las funciones del archivo anterior para completarlo.
+        // --- NUEVOS MÉTODOS PARA HARDWARE ---
+
+        private void chkModoReal_Checked(object sender, RoutedEventArgs e)
+        {
+            _usarMaquinaReal = chkModoReal.IsChecked == true;
+            PanelPuertos.Visibility = _usarMaquinaReal ? Visibility.Visible : Visibility.Collapsed;
+
+            if (_usarMaquinaReal)
+            {
+                txtEstado.Text = "MODO REAL: SELECCIONE PUERTO";
+                txtEstado.Foreground = Media.Brushes.Orange;
+                ActualizarListaPuertos();
+            }
+            else
+            {
+                _miDriver.Desconectar();
+                txtEstado.Text = "MODO SIMULACIÓN";
+                txtEstado.Foreground = Media.Brushes.Gray;
+                btnConectar.Content = "CONECTAR MÁQUINA";
+                btnConectar.Background = (Media.Brush)new Media.BrushConverter().ConvertFrom("#007ACC");
+            }
+        }
+
+        private void ActualizarListaPuertos()
+        {
+            cmbPuertos.ItemsSource = System.IO.Ports.SerialPort.GetPortNames();
+            if (cmbPuertos.Items.Count > 0) cmbPuertos.SelectedIndex = 0;
+        }
+
+        private void btnRefrescar_Click(object sender, RoutedEventArgs e)
+        {
+            ActualizarListaPuertos();
+        }
+
+        private void btnConectar_Click(object sender, RoutedEventArgs e)
+        {
+            if (btnConectar.Content.ToString().Contains("CONECTAR"))
+            {
+                string puerto = cmbPuertos.SelectedItem as string;
+                if (string.IsNullOrEmpty(puerto)) return;
+
+                bool exito = _miDriver.Conectar(puerto);
+                if (exito)
+                {
+                    btnConectar.Content = "DESCONECTAR";
+                    btnConectar.Background = Media.Brushes.Red;
+                    txtEstado.Foreground = Media.Brushes.Lime;
+                }
+            }
+            else
+            {
+                _miDriver.Desconectar();
+                btnConectar.Content = "CONECTAR MÁQUINA";
+                btnConectar.Background = (Media.Brush)new Media.BrushConverter().ConvertFrom("#007ACC");
+            }
+        }
+        private void btnMotor_Click(object sender, RoutedEventArgs e)
+        {
+            if (!_motorEncendido)
+            {
+                // INICIO
+                _viendoHistorial = false;
+                InfoBox.Visibility = Visibility.Collapsed;
+
+                if (_usarMaquinaReal)
+                {
+                    // Lógica Real: Arrancar a 1.5 Hz (Valor 15 decimal -> 0F hexa aprox)
+                    // NOTA: Puedes poner un TextBox en la UI para elegir la frecuencia
+                    _miDriver.EncenderMotor(1);
+                }
+                else
+                {
+                    // Lógica Simulador
+                    _miSimulador.Iniciar();
+                }
+
+                _motorEncendido = true;
+                if (txtBtnMotor != null) txtBtnMotor.Text = "APAGAR";
+
+                // Ajuste visual
+                txtEstado.Text = _usarMaquinaReal ? "MOTOR REAL ACTIVO" : "SIMULACIÓN ACTIVA";
+                txtEstado.Foreground = new Media.SolidColorBrush(Media.Colors.Yellow);
+
+                btnGrabar.IsEnabled = true;
+                PanelGuardado.Visibility = Visibility.Collapsed;
+                _inicioGrabacion = DateTime.Now;
+                _contadorCiclos = 0;
+            }
+            else
+            {
+                // PARADA
+                if (_usarMaquinaReal) _miDriver.DetenerMotor();
+                else _miSimulador.Detener();
+
+                _motorEncendido = false;
+                if (_grabando) btnGuardar_Click(null, null);
+                if (txtBtnMotor != null) txtBtnMotor.Text = "ENCENDER";
+
+                txtEstado.Text = "DETENIDO";
+                txtEstado.Foreground = new Media.SolidColorBrush(Media.Colors.Gray);
+                btnGrabar.IsEnabled = false;
+                btnGuardar.IsEnabled = false;
+            }
+        }
+
+        //-----------------------------------------------------------------------------
 
         private (double[] vel, double[] fza) CalcularCurvaPromedio(List<PuntoDeEnsayo> datos) { if (datos == null || datos.Count < 10) return (new double[0], new double[0]); var puntos = datos.Select(p => new { V = p.Velocidad, F = p.Fuerza }).ToList(); var puntosOrdenados = puntos.OrderBy(p => p.V).ToList(); int ventana = 20; var velSuave = new List<double>(); var fzaSuave = new List<double>(); for (int i = 0; i < puntosOrdenados.Count; i++) { int start = Math.Max(0, i - ventana / 2); int end = Math.Min(puntosOrdenados.Count, i + ventana / 2); int count = end - start; double sumV = 0; double sumF = 0; for (int j = start; j < end; j++) { sumV += puntosOrdenados[j].V; sumF += puntosOrdenados[j].F; } velSuave.Add(sumV / count); fzaSuave.Add(sumF / count); } return (velSuave.ToArray(), fzaSuave.ToArray()); }
         private void ActualizarGrafico() { GraficoPrincipal.Plot.Clear(); if (_ensayoReferencia != null && _ensayoReferencia.Count > 0) { double[] refX = null, refY = null; switch (_modoGrafico) { case "FvsD": refX = _ensayoReferencia.Select(p => p.Posicion).ToArray(); refY = _ensayoReferencia.Select(p => p.Fuerza).ToArray(); break; case "FvsV": refX = _ensayoReferencia.Select(p => p.Velocidad).ToArray(); refY = _ensayoReferencia.Select(p => p.Fuerza).ToArray(); break; case "FPromVsV": var res = CalcularCurvaPromedio(_ensayoReferencia); refX = res.vel; refY = res.fza; break; } if (refX != null && refY != null && refX.Length > 0) { var spRef = GraficoPrincipal.Plot.Add.Scatter(refX, refY); spRef.Color = ScottPlot.Color.FromHex("#444444"); spRef.LineWidth = 2; spRef.LinePattern = LinePattern.Dotted; spRef.Label = "Referencia (Fondo)"; } } var colorFuerza = ScottPlot.Color.FromHex("#FF4081"); var colorPos = ScottPlot.Color.FromHex("#00E5FF"); var colorVel = ScottPlot.Color.FromHex("#B2FF59"); var colorProm = ScottPlot.Color.FromHex("#FFA500"); var colorHistorial = ScottPlot.Color.FromHex("#FFD700"); double[] datosX = null; double[] datosY = null; double[] datosY2 = null; var fuenteDatos = _viendoHistorial ? _ensayoCargado : null; switch (_modoGrafico) { case "FvsD": datosX = _viendoHistorial ? fuenteDatos.Select(p => p.Posicion).ToArray() : bufferPos.ToArray(); datosY = _viendoHistorial ? fuenteDatos.Select(p => p.Fuerza).ToArray() : bufferFuerza.ToArray(); break; case "FvsV": datosX = _viendoHistorial ? fuenteDatos.Select(p => p.Velocidad).ToArray() : bufferVel.ToArray(); datosY = _viendoHistorial ? fuenteDatos.Select(p => p.Fuerza).ToArray() : bufferFuerza.ToArray(); break; case "FPromVsV": if (_viendoHistorial) { var res = CalcularCurvaPromedio(fuenteDatos); datosX = res.vel; datosY = res.fza; } else { var pts = new List<PuntoDeEnsayo>(); for (int i = 0; i < bufferVel.Count; i++) pts.Add(new PuntoDeEnsayo { Velocidad = bufferVel[i], Fuerza = bufferFuerza[i] }); var res = CalcularCurvaPromedio(pts); datosX = res.vel; datosY = res.fza; } break; case "FDvsT": datosX = _viendoHistorial ? fuenteDatos.Select(p => p.Tiempo).ToArray() : null; datosY = _viendoHistorial ? fuenteDatos.Select(p => p.Fuerza).ToArray() : bufferFuerza.ToArray(); datosY2 = _viendoHistorial ? fuenteDatos.Select(p => p.Posicion).ToArray() : bufferPos.ToArray(); break; case "FVvsT": datosX = _viendoHistorial ? fuenteDatos.Select(p => p.Tiempo).ToArray() : null; datosY = _viendoHistorial ? fuenteDatos.Select(p => p.Fuerza).ToArray() : bufferFuerza.ToArray(); datosY2 = _viendoHistorial ? fuenteDatos.Select(p => p.Velocidad).ToArray() : bufferVel.ToArray(); break; case "PicoVsV": datosX = _viendoHistorial ? fuenteDatos.Select(p => p.Velocidad).ToArray() : bufferVel.ToArray(); datosY = _viendoHistorial ? fuenteDatos.Select(p => p.Fuerza).ToArray() : bufferFuerza.ToArray(); break; } if (datosY == null && datosX == null) return; switch (_modoGrafico) { case "FvsD": var sp1 = GraficoPrincipal.Plot.Add.Scatter(datosX, datosY); sp1.Color = _viendoHistorial ? colorHistorial : colorFuerza; sp1.LineWidth = 2; sp1.Label = "Ciclo"; GraficoPrincipal.Plot.Title("Ciclo de Histéresis"); GraficoPrincipal.Plot.Axes.Bottom.Label.Text = "Posición (mm)"; GraficoPrincipal.Plot.Axes.Left.Label.Text = "Fuerza (kg)"; break; case "FvsV": var sp2 = GraficoPrincipal.Plot.Add.Scatter(datosX, datosY); sp2.Color = _viendoHistorial ? colorHistorial : colorVel; sp2.LineWidth = 2; sp2.Label = "Amortiguamiento"; GraficoPrincipal.Plot.Title("Fuerza vs Velocidad"); GraficoPrincipal.Plot.Axes.Bottom.Label.Text = "Velocidad (mm/s)"; GraficoPrincipal.Plot.Axes.Left.Label.Text = "Fuerza (kg)"; break; case "FPromVsV": var spProm = GraficoPrincipal.Plot.Add.Scatter(datosX, datosY); spProm.Color = colorProm; spProm.LineWidth = 3; spProm.MarkerSize = 0; spProm.Label = "Promedio"; GraficoPrincipal.Plot.Title("Curva Característica (Promedio)"); GraficoPrincipal.Plot.Axes.Bottom.Label.Text = "Velocidad (mm/s)"; GraficoPrincipal.Plot.Axes.Left.Label.Text = "Fuerza (kg)"; break; case "FDvsT": case "FVvsT": if (_viendoHistorial) { var s1 = GraficoPrincipal.Plot.Add.Scatter(datosX, datosY); s1.Color = colorFuerza; s1.Axes.YAxis = GraficoPrincipal.Plot.Axes.Left; s1.Label = "Fuerza"; var s2 = GraficoPrincipal.Plot.Add.Scatter(datosX, datosY2); s2.Color = (_modoGrafico == "FDvsT" ? colorPos : colorVel); s2.Axes.YAxis = GraficoPrincipal.Plot.Axes.Right; s2.Label = (_modoGrafico == "FDvsT" ? "Posición" : "Velocidad"); } else { var s1 = GraficoPrincipal.Plot.Add.Signal(datosY); s1.Color = colorFuerza; s1.Axes.YAxis = GraficoPrincipal.Plot.Axes.Left; s1.Label = "Fuerza"; var s2 = GraficoPrincipal.Plot.Add.Signal(datosY2); s2.Color = (_modoGrafico == "FDvsT" ? colorPos : colorVel); s2.Axes.YAxis = GraficoPrincipal.Plot.Axes.Right; s2.Label = (_modoGrafico == "FDvsT" ? "Posición" : "Velocidad"); } GraficoPrincipal.Plot.Title("Dominio del Tiempo"); GraficoPrincipal.Plot.Axes.Bottom.Label.Text = "Tiempo (ms)"; GraficoPrincipal.Plot.Axes.Left.Label.Text = "Fuerza (kg)"; GraficoPrincipal.Plot.Axes.Right.Label.Text = (_modoGrafico == "FDvsT" ? "Posición (mm)" : "Velocidad (mm/s)"); break; case "PicoVsV": var sp3 = GraficoPrincipal.Plot.Add.Scatter(datosX, datosY); sp3.Color = ScottPlot.Color.FromHex("#FFFFFF"); sp3.MarkerSize = 2; sp3.LineWidth = 0; sp3.Label = "Picos"; GraficoPrincipal.Plot.Title("Puntos Pico"); GraficoPrincipal.Plot.Axes.Bottom.Label.Text = "Velocidad (mm/s)"; GraficoPrincipal.Plot.Axes.Left.Label.Text = "Fuerza (kg)"; break; } GraficoPrincipal.Plot.Axes.AutoScale(); GraficoPrincipal.Refresh(); }
         private void CambiarGrafico_Checked(object sender, RoutedEventArgs e) { if (sender is RadioButton rb && rb.Tag != null) { _modoGrafico = rb.Tag.ToString(); if (_viendoHistorial || _ensayoReferencia.Count > 0) ActualizarGrafico(); } }
-        private void btnMotor_Click(object sender, RoutedEventArgs e) { if (!_motorEncendido) { _viendoHistorial = false; InfoBox.Visibility = Visibility.Collapsed; _miSimulador.Iniciar(); _motorEncendido = true; if (txtBtnMotor != null) txtBtnMotor.Text = "APAGAR"; txtEstado.Text = "MOTOR ENCENDIDO - MODO VIVO"; txtEstado.Foreground = new Media.SolidColorBrush(Media.Colors.Yellow); btnGrabar.IsEnabled = true; PanelGuardado.Visibility = Visibility.Collapsed; _inicioGrabacion = DateTime.Now; _contadorCiclos = 0; } else { _miSimulador.Detener(); _motorEncendido = false; if (_grabando) btnGuardar_Click(null, null); if (txtBtnMotor != null) txtBtnMotor.Text = "ENCENDER"; txtEstado.Text = "DETENIDO"; txtEstado.Foreground = new Media.SolidColorBrush(Media.Colors.Gray); btnGrabar.IsEnabled = false; btnGuardar.IsEnabled = false; } }
         private void btnGrabar_Click(object sender, RoutedEventArgs e) { _ensayoGrabado.Clear(); _grabando = true; _viendoHistorial = false; InfoBox.Visibility = Visibility.Collapsed; PanelGuardado.Visibility = Visibility.Collapsed; btnGrabar.IsEnabled = false; btnGrabar.Opacity = 0.5; btnGuardar.IsEnabled = true; btnGuardar.Opacity = 1; txtEstado.Text = "● GRABANDO DATOS..."; txtEstado.Foreground = new Media.SolidColorBrush(Media.Colors.Red); _inicioGrabacion = DateTime.Now; maxCompresion = 0; maxExpansion = 0; }
         private void btnGuardar_Click(object sender, RoutedEventArgs e) { _grabando = false; btnGrabar.IsEnabled = false; btnGrabar.Opacity = 0.5; btnGuardar.IsEnabled = false; btnGuardar.Opacity = 0.5; PanelGuardado.Visibility = Visibility.Visible; txtEstado.Text = "ESPERANDO DATOS..."; txtEstado.Foreground = new Media.SolidColorBrush(Media.Colors.Cyan); }
         private void btnConfirmarGuardado_Click(object sender, RoutedEventArgs e) { PanelGuardado.Visibility = Visibility.Collapsed; string nombreCliente = txtInputCliente.Text; string modeloVehiculo = txtInputVehiculo.Text; string notasEnsayo = txtInputNotas.Text; txtEstado.Text = "GUARDANDO..."; var datosParaGuardar = new List<PuntoDeEnsayo>(_ensayoGrabado); Task.Run(() => { try { string json = System.Text.Json.JsonSerializer.Serialize(datosParaGuardar); byte[] datosBytes = System.Text.Encoding.UTF8.GetBytes(json); using (var db = new Modelos.SagaContext()) { var cliente = db.Clientes.FirstOrDefault(c => c.Nombre == nombreCliente); if (cliente == null) { cliente = new Modelos.Cliente { Nombre = nombreCliente, Email = "N/A" }; db.Clientes.Add(cliente); db.SaveChanges(); } var vehiculo = db.Vehiculos.FirstOrDefault(v => v.Modelo == modeloVehiculo && v.ClienteId == cliente.Id); if (vehiculo == null) { vehiculo = new Modelos.Vehiculo { Marca = "SAGA", Modelo = modeloVehiculo, ClienteId = cliente.Id }; db.Vehiculos.Add(vehiculo); db.SaveChanges(); } var ensayo = new Modelos.Ensayo { Fecha = DateTime.Now, Notas = notasEnsayo, MaxCompresion = maxCompresion, MaxExpansion = maxExpansion, VehiculoId = vehiculo.Id, DatosCrudos = datosBytes }; db.Ensayos.Add(ensayo); db.SaveChanges(); } Dispatcher.Invoke(() => { btnGrabar.IsEnabled = true; btnGrabar.Opacity = 1; MessageBox.Show($"¡Ensayo Guardado!"); txtEstado.Text = "GUARDADO OK"; InfoBox.Visibility = Visibility.Visible; lblCliente.Text = $"Cliente: {nombreCliente}"; lblVehiculo.Text = $"Vehículo: {modeloVehiculo}"; lblFecha.Text = $"Fecha: {DateTime.Now}"; lblNotas.Text = notasEnsayo; _ensayoCargado = new List<PuntoDeEnsayo>(datosParaGuardar); _viendoHistorial = true; ActualizarGrafico(); }); } catch (Exception ex) { Dispatcher.Invoke(() => { MessageBox.Show("Error: " + ex.Message); btnGrabar.IsEnabled = true; }); } }); }
@@ -227,5 +340,6 @@ namespace SagaIngenieria
         private void btnImprimir_Click(object sender, RoutedEventArgs e) { Modelos.Ensayo ensayoAImprimir = null; if (_viendoHistorial && _ensayoCargado.Count > 0) { ensayoAImprimir = new Modelos.Ensayo { Id = 0, Fecha = DateTime.Parse(lblFecha.Text.Replace("Fecha: ", "")), Notas = lblNotas.Text, MaxCompresion = double.Parse(txtMaxComp.Text), MaxExpansion = double.Parse(txtMaxExpa.Text), Vehiculo = new Modelos.Vehiculo { Modelo = lblVehiculo.Text.Replace("Vehículo: ", ""), Cliente = new Modelos.Cliente { Nombre = lblCliente.Text.Replace("Cliente: ", "") } }, DatosCrudos = System.Text.Encoding.UTF8.GetBytes(System.Text.Json.JsonSerializer.Serialize(_ensayoCargado)) }; } else if (!_motorEncendido && _ensayoGrabado.Count > 0) { if (MessageBox.Show("Imprimir ensayo no guardado?", "Confirmar", MessageBoxButton.YesNo) == MessageBoxResult.No) return; ensayoAImprimir = new Modelos.Ensayo { Fecha = DateTime.Now, Notas = "Ensayo temporal", MaxCompresion = maxCompresion, MaxExpansion = maxExpansion, Vehiculo = new Modelos.Vehiculo { Modelo = "En Vivo", Cliente = new Modelos.Cliente { Nombre = "Taller" } }, DatosCrudos = System.Text.Encoding.UTF8.GetBytes(System.Text.Json.JsonSerializer.Serialize(_ensayoGrabado)) }; } else { MessageBox.Show("Carga un ensayo primero."); return; } var saveDialog = new Microsoft.Win32.SaveFileDialog { FileName = $"Reporte_SAGA_{DateTime.Now:yyyyMMdd_HHmm}.pdf", Filter = "Documento PDF|*.pdf" }; if (saveDialog.ShowDialog() == true) { try { GeneradorReporte.Generar(ensayoAImprimir, saveDialog.FileName); if (MessageBox.Show("Reporte listo. ¿Abrir?", "PDF", MessageBoxButton.YesNo) == MessageBoxResult.Yes) { new System.Diagnostics.Process { StartInfo = new System.Diagnostics.ProcessStartInfo(saveDialog.FileName) { UseShellExecute = true } }.Start(); } } catch (Exception ex) { MessageBox.Show("Error: " + ex.Message); } } }
         private void btnExportar_Click(object sender, RoutedEventArgs e) { List<PuntoDeEnsayo> datos = null; if (_viendoHistorial) datos = _ensayoCargado; else if (_ensayoGrabado.Count > 0) datos = _ensayoGrabado; if (datos == null || datos.Count == 0) { MessageBox.Show("No hay datos para exportar."); return; } var saveDialog = new Microsoft.Win32.SaveFileDialog { FileName = $"Datos_SAGA_{DateTime.Now:yyyyMMdd_HHmm}.csv", Filter = "Archivo CSV (Excel)|*.csv" }; if (saveDialog.ShowDialog() == true) { try { var sb = new StringBuilder(); sb.AppendLine("Tiempo(s);Posicion(mm);Fuerza(kg);Velocidad(mm/s)"); foreach (var p in datos) sb.AppendLine($"{p.Tiempo:F3};{p.Posicion:F2};{p.Fuerza:F2};{p.Velocidad:F2}"); System.IO.File.WriteAllText(saveDialog.FileName, sb.ToString()); MessageBox.Show("Exportado a Excel correctamente."); } catch (Exception ex) { MessageBox.Show("Error: " + ex.Message); } } }
     }
+
 }
 
