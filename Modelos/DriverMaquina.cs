@@ -3,6 +3,7 @@ using System.IO.Ports;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Windows;
+using SagaIngenieria.Modelos; // Importamos el protocolo
 
 namespace SagaIngenieria
 {
@@ -11,172 +12,196 @@ namespace SagaIngenieria
         private SerialPort _puertoSerie;
         private bool _conectado = false;
         private bool _motorActivo = false;
+        private CancellationTokenSource _cancelToken;
 
-        // Evento idéntico al del simulador para no romper la UI
+        // Eventos para la UI (Mantenemos la firma original para no romper MainWindow)
         public event Action<double, double> NuevosDatosRecibidos;
-
-        // Evento para notificar errores o estados a la UI
         public event Action<string> LogEstado;
 
         public DriverMaquina()
         {
             _puertoSerie = new SerialPort();
-            // Configuración estándar (¡Verifica estos valores con el manual del hardware!)
-            _puertoSerie.BaudRate = 9600;
-            _puertoSerie.DataBits = 8;
-            _puertoSerie.Parity = Parity.None;
-            _puertoSerie.StopBits = StopBits.One;
-            _puertoSerie.ReadTimeout = 500;
-            _puertoSerie.WriteTimeout = 500;
         }
 
         public bool Conectar(string nombrePuerto)
         {
-            try
-            {
+            
                 if (_puertoSerie.IsOpen) _puertoSerie.Close();
 
+                // 1. CONFIGURACIÓN CORRECTA (CRÍTICO)
+                // El código legacy usa 57600, no 9600.
                 _puertoSerie.PortName = nombrePuerto;
+                _puertoSerie.BaudRate = 57600;
+                _puertoSerie.DataBits = 8;
+                _puertoSerie.Parity = Parity.None;
+                _puertoSerie.StopBits = StopBits.One;
+                _puertoSerie.Handshake = Handshake.None; // Importante: Sin control de flujo por hardware
+                                                         // Tiempos de espera cortos para no congelar la UI si falla
+                _puertoSerie.ReadTimeout = 500;
+                _puertoSerie.WriteTimeout = 500;
+
+
+            try
+            {
+                
+
                 _puertoSerie.Open();
 
-                // 1. Protocolo: Clave de acceso (Según punto 1 del doc)
-                // PC envía :C00Z
-                string respuesta = EnviarComando("C00Z");
+                // Limpiamos la cañería antes de arrancar
+                _puertoSerie.DiscardInBuffer();
+                _puertoSerie.DiscardOutBuffer();
 
-                // EQUIPO responde :C99Z o :C88Z
-                if (respuesta.Contains("C99Z") || respuesta.Contains("C88Z"))
-                {
-                    _conectado = true;
-                    LogEstado?.Invoke("Conexión Exitosa con Máquina");
-                    return true;
-                }
-                else
-                {
-                    LogEstado?.Invoke($"Respuesta inesperada al conectar: {respuesta}");
-                    _puertoSerie.Close();
-                    return false;
-                }
+                // 2. HANDSHAKE / HABILITACIÓN
+                // Enviamos el comando de "Habilitar Equipo" (:C00DAZ)
+                // Tu código enviaba C00Z, que la máquina ignoraba por seguridad.
+                EnviarTramaRaw(SagaProtocol.HabilitarEquipo);
+
+                // Esperamos un instante técnico para que el microprocesador de la máquina procese
+                Thread.Sleep(150);
+
+                _conectado = true;
+                LogEstado?.Invoke($"Conectado a {nombrePuerto} (57600 baud). Equipo Habilitado.");
+                return true;
             }
             catch (Exception ex)
             {
-                LogEstado?.Invoke($"Error de puerto: {ex.Message}");
+                LogEstado?.Invoke($"Error al conectar: {ex.Message}");
                 return false;
             }
         }
 
         public void Desconectar()
         {
-            _motorActivo = false;
-            if (_puertoSerie.IsOpen) _puertoSerie.Close();
-            _conectado = false;
-            LogEstado?.Invoke("Desconectado.");
+            try
+            {
+                if (_conectado && _puertoSerie.IsOpen)
+                {
+                    // Buenas prácticas: Avisar a la máquina que nos vamos
+                    EnviarTramaRaw(SagaProtocol.DeshabilitarEquipo);
+                }
+            }
+            catch { /* Ignorar errores al cerrar */ }
+            finally
+            {
+                _motorActivo = false;
+                if (_cancelToken != null) _cancelToken.Cancel();
+                if (_puertoSerie.IsOpen) _puertoSerie.Close();
+                _conectado = false;
+                LogEstado?.Invoke("Desconectado.");
+            }
         }
 
-        public void EncenderMotor(int frecuenciaHz)
+        public void EncenderMotor(double frecuenciaHz)
         {
             if (!_conectado) return;
 
-            // Protocolo punto 22: :C15DXXZ
-            // XX es Hexa. El valor es frecuencia * 10. 
-            // Ejemplo: 1.0 Hz -> 10 decimal -> 0A Hexa.
+            // Conversión a Hexadecimal según protocolo
+            // Ejemplo: 1.5 Hz -> 15 decimal -> "0F" Hex
+            int valorEntero = (int)(frecuenciaHz * 10);
+            string hexValue = valorEntero.ToString("X2");
 
-            int valorParaEnviar = frecuenciaHz * 10;
-            string hexValue = valorParaEnviar.ToString("X2"); // Convierte a Hexa 2 dígitos
+            // Armamos el comando: :C15D + XX + Z
+            string cmd = $"{SagaProtocol.EncenderMotorHeader}{hexValue}{SagaProtocol.Terminador}";
 
-            string cmd = $"C15D{hexValue}Z";
-            string respuesta = EnviarComando(cmd);
+            EnviarTramaRaw(cmd);
 
-            // Asumimos que si no da error, arrancó. 
-            // (El doc no especifica respuesta de confirmación clara aquí, a veces es C99Z)
             _motorActivo = true;
-            LogEstado?.Invoke($"Motor Encendido a {frecuenciaHz} Hz ({cmd})");
+            LogEstado?.Invoke($"Motor RUN: {frecuenciaHz} Hz (CMD: {cmd})");
 
-            // INICIAMOS EL BUCLE DE LECTURA DE DATOS
-            Task.Run(BucleLecturaDatos);
+            // Iniciamos el ciclo de lectura en segundo plano
+            _cancelToken = new CancellationTokenSource();
+            Task.Run(() => BucleLecturaDatos(_cancelToken.Token));
         }
 
         public void DetenerMotor()
         {
             _motorActivo = false;
-            // Protocolo punto 23: :C16Z
-            EnviarComando("C16Z");
-            LogEstado?.Invoke("Motor Detenido");
+            if (_cancelToken != null) _cancelToken.Cancel();
+
+            // Comando de Parada Segura
+            EnviarTramaRaw(SagaProtocol.DetenerMotor);
+            LogEstado?.Invoke("Motor STOP enviado.");
         }
 
-        // --- LÓGICA PRIVADA ---
+        // --- LÓGICA PRIVADA DE BAJO NIVEL ---
 
-        private string EnviarComando(string contenidoComando)
+        /// <summary>
+        /// Envía el string EXACTO sin agregar caracteres ocultos.
+        /// CORRECCIÓN: Tu código anterior agregaba \r y dos puntos extra.
+        /// </summary>
+        private void EnviarTramaRaw(string trama)
         {
-            if (!_puertoSerie.IsOpen) return "";
-
+            if (!_puertoSerie.IsOpen) return;
             try
             {
-                // El protocolo usa ":" al inicio y presuntamente retorno de carro
-                // Según el doc: PC-> EQUIPO :C00Z
-                string trama = $":{contenidoComando}\r";
-
-                // Limpiamos buffers antes de preguntar
-                _puertoSerie.DiscardInBuffer();
+                _puertoSerie.DiscardInBuffer(); // Limpiar ruidos viejos
                 _puertoSerie.Write(trama);
-
-                // Esperamos respuesta. El protocolo dice que terminan en Z habitualmente
-                // Usaremos ReadTo("Z") o ReadLine según se comporte el equipo real
-                string respuesta = _puertoSerie.ReadTo("Z");
-                return respuesta + "Z"; // Le agregamos la Z que se comió el ReadTo
-            }
-            catch (TimeoutException)
-            {
-                return "TIMEOUT";
             }
             catch (Exception ex)
             {
-                return "ERROR: " + ex.Message;
+                LogEstado?.Invoke("Error TX: " + ex.Message);
             }
         }
 
-        private async Task BucleLecturaDatos()
+        private async Task BucleLecturaDatos(CancellationToken token)
         {
-            // ESTRATEGIA: POLLING (Preguntar repetidamente)
-            // Como el doc no muestra un comando de "streaming", vamos a intentar
-            // leer el resultado de conversión AD7730 (Punto 5 del doc) repetidamente.
-            // COMANDO: :C04Z -> Responde :C04DXXXXXXZ
-
-            while (_motorActivo && _conectado)
+            // Bucle de Polling (Pregunta - Respuesta)
+            // Imitamos el comportamiento del Timer de VB6 del software viejo
+            while (_motorActivo && _conectado && !token.IsCancellationRequested)
             {
                 try
                 {
-                    // 1. Pedir FUERZA (Asumiendo que C04 trae el dato del sensor de carga)
-                    // Nota: Necesitamos saber qué comando trae la POSICIÓN. 
-                    // El doc menciona AD7730 (conversor AD). Asumiré por ahora que es Fuerza.
-                    string respuesta = EnviarComando("C04Z");
+                    // 1. SOLICITUD: Pedimos datos instantáneos (:C1AZ)
+                    _puertoSerie.Write(SagaProtocol.LeerSensoresInstantaneo);
 
-                    if (respuesta.StartsWith(":C04D"))
+                    // 2. ESPERA: Damos tiempo al ADC para convertir (Crítico en RS232)
+                    await Task.Delay(80, token);
+
+                    // 3. LECTURA: Leemos todo lo que haya en el buffer
+                    // Usamos ReadExisting en lugar de ReadTo para evitar bloqueos si falta la 'Z'
+                    string respuesta = _puertoSerie.ReadExisting();
+
+                    // 4. PARSEO (Decodificación)
+                    // Buscamos la cabecera :C1BD
+                    int indiceCabecera = respuesta.IndexOf(SagaProtocol.HeaderRespuestaDatos);
+
+                    // Verificamos tener suficientes caracteres después de la cabecera
+                    // Estructura esperada: ... :C1BD FFFF PPP ...
+                    // FFFF (4 chars fuerza) + PPP (3 chars posición) = 7 chars mínimos de payload
+                    if (indiceCabecera >= 0 && (respuesta.Length >= indiceCabecera + 5 + 7))
                     {
-                        // Parsear Hexa: :C04D XXXXXX Z
-                        // XXXXXX son 6 caracteres hex
-                        string hexData = respuesta.Substring(5, 6);
-                        int valorCrudo = Convert.ToInt32(hexData, 16);
+                        // Extraemos Hexadecimales
+                        // Offset 5 es para saltar el ":C1BD"
+                        string hexFuerza = respuesta.Substring(indiceCabecera + 5, 4);
+                        string hexPos = respuesta.Substring(indiceCabecera + 9, 3);
 
-                        // CALIBRACIÓN TEMPORAL (Esto tendrás que ajustarlo con la máquina real)
-                        // Digamos que FFF is 0 y tiene signo... esto es complejo sin ver el equipo.
-                        // Por ahora lo tratamos como entero simple.
-                        double fuerza = (valorCrudo - 8388608) / 100.0; // Simulando un offset de 24 bits
+                        // Convertimos Hex a Entero
+                        int valFuerzaRaw = Convert.ToInt32(hexFuerza, 16);
+                        int valPosRaw = Convert.ToInt32(hexPos, 16);
 
-                        // NOTA: Falta la Posición. El protocolo es vago sobre dónde leer la posición en tiempo real.
-                        // Usaremos un valor simulado para la posición por ahora para que el gráfico no falle
-                        double posicion = 50 * Math.Sin(DateTime.Now.Millisecond / 100.0);
+                        // ESCALADO (Según SerialDynoDriver.cs)
+                        // Fuerza: Viene multiplicada por 10
+                        double fuerzaKg = valFuerzaRaw * 0.1;
+
+                        // Posición: Viene directa en pulsos/mm (Ajustar según calibración física)
+                        double posicionMm = valPosRaw;
 
                         // Disparamos evento a la UI
-                        NuevosDatosRecibidos?.Invoke(posicion, fuerza);
+                        NuevosDatosRecibidos?.Invoke(posicionMm, fuerzaKg);
                     }
                 }
-                catch
+                catch (TaskCanceledException)
                 {
-                    // Ignorar errores de timeout en el bucle para no frenar
+                    break; // Salida limpia
+                }
+                catch (Exception)
+                {
+                    // Ignoramos errores de trama corrupta puntual para no frenar el bucle
+                    // En telemetría es preferible perder un dato que frenar el proceso
                 }
 
-                // Esperar un poco para no saturar el puerto serie
-                await Task.Delay(20);
+                // Pequeña pausa para no saturar el hilo
+                await Task.Delay(20, token);
             }
         }
     }
