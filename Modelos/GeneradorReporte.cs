@@ -8,7 +8,7 @@ using QuestPDF.Infrastructure;
 using QColors = QuestPDF.Helpers.Colors; // "QColors" será para el PDF
 using SPlot = ScottPlot; // "SPlot" será para los gráficos
 
-namespace SagaIngenieria .Modelos
+namespace SagaIngenieria.Modelos
 {
     public static class GeneradorReporte
     {
@@ -171,11 +171,20 @@ namespace SagaIngenieria .Modelos
         {
             try
             {
-                if (datos == null || datos.Length == 0) return null;
+                if (datos == null || datos.Length == 0) return new List<PuntoDeEnsayo>();
+
+                // Convertimos los bytes a string (JSON)
                 string json = System.Text.Encoding.UTF8.GetString(datos);
-                return System.Text.Json.JsonSerializer.Deserialize<List<PuntoDeEnsayo>>(json);
+
+                // Deserializamos usando System.Text.Json (Nativo en .NET 8)
+                return System.Text.Json.JsonSerializer.Deserialize<List<PuntoDeEnsayo>>(json)
+                       ?? new List<PuntoDeEnsayo>();
             }
-            catch { return null; }
+            catch
+            {
+                // En caso de error (o formato antiguo), devolvemos lista vacía para no romper el programa
+                return new List<PuntoDeEnsayo>();
+            }
         }
     }
-}
+}   

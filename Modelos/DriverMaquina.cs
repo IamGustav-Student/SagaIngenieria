@@ -4,249 +4,266 @@ using System.IO.Ports;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
-using System.Windows;
-using SagaIngenieria.Modelos;
 
-namespace SagaIngenieria
+namespace SagaIngenieria.Modelos
 {
-    public class DriverMaquina
+    // CORRECCIÓN: La interfaz correcta es IDisposable (con 'a'), no IDisponible.
+    public class DriverMaquina : IDisposable
     {
-        private SerialPort _puertoSerie;
-        private bool _conectado = false;
+        private SerialPort _puerto;
+        public bool EstaConectado => _puerto != null && _puerto.IsOpen;
 
-        // Eventos
-        public event Action<double, double> NuevosDatosRecibidos; // Para gráfico
-        public event Action<string> LogEstado; // Para debug en UI
-        public event Action DescargaFinalizada; // Nuevo: Avisa cuando termina de bajar todo
+        // Eventos para la UI (Nivel Dios: No bloquean la pantalla)
+        public event Action<string> Log;
+        public event Action<int> ProgresoDescarga;
 
-        public DriverMaquina()
+        public async Task<bool> Conectar(string puertoNombre, int baudRate = 57600)
         {
-            _puertoSerie = new SerialPort();
-            // Suscribimos al evento de recepción de datos para el modo asíncrono
-            _puertoSerie.DataReceived += ProcesarEntradaPuerto;
-        }
-
-        // --- CONEXIÓN ---
-        public bool Conectar(string nombrePuerto)
-        {
-            if (_puertoSerie.IsOpen) _puertoSerie.Close();
-
-            // Configuración según estándar industrial RS232 para microcontroladores viejos
-            _puertoSerie.PortName = nombrePuerto;
-            _puertoSerie.BaudRate = 57600; // Según tu código legacy
-            _puertoSerie.DataBits = 8;
-            _puertoSerie.Parity = Parity.None;
-            _puertoSerie.StopBits = StopBits.One;
-            _puertoSerie.Handshake = Handshake.None;
-            _puertoSerie.ReadTimeout = 1000;
-            _puertoSerie.WriteTimeout = 1000;
+            // Asegurarnos de cerrar cualquier conexión previa limpia o sucia
+            if (_puerto != null && _puerto.IsOpen)
+            {
+                _puerto.Close();
+                _puerto.Dispose();
+            }
 
             try
             {
-                _puertoSerie.Open();
-                _puertoSerie.DiscardInBuffer();
-                _puertoSerie.DiscardOutBuffer();
+                _puerto = new SerialPort(puertoNombre, baudRate, Parity.None, 8, StopBits.One);
+                _puerto.ReadTimeout = 500; // Timeout corto para el handshake
+                _puerto.WriteTimeout = 500;
+                _puerto.DtrEnable = true;  // IMPORTANTE: Algunos equipos viejos necesitan DTR/RTS
+                _puerto.RtsEnable = true;
+                _puerto.Open();
 
-                // 1. HANDSHAKE (Sección 1 del Doc)
-                LogEstado?.Invoke($"Enviando Handshake ({SagaProtocol.HabilitarEquipo})...");
-                _puertoSerie.Write(SagaProtocol.HabilitarEquipo);
+                // Limpieza inicial de buffers
+                _puerto.DiscardInBuffer();
+                _puerto.DiscardOutBuffer();
 
-                // Esperamos respuesta brevemente (Bloqueante solo al inicio)
-                Thread.Sleep(200);
-                string respuesta = _puertoSerie.ReadExisting();
+                Log?.Invoke($"Puerto {puertoNombre} abierto. Iniciando Handshake con la máquina...");
 
-                if (respuesta.Contains(":C99Z") || respuesta.Contains(":C88Z"))
+                // --- FASE DE HANDSHAKE ACTIVO ---
+
+                // Intento 1: Despertar a la máquina (Protocolo Legacy)
+                // Enviamos secuencia de habilitación y esperamos el ACK específico (:C99Z)
+                bool maquinaDetectada = await ValidarConexionHardware();
+
+                if (maquinaDetectada)
                 {
-                    _conectado = true;
-                    LogEstado?.Invoke("CONEXIÓN EXITOSA: Equipo Habilitado.");
+                    Log?.Invoke("✅ MÁQUINA DETECTADA Y VALIDADA.");
+                    // Dejamos el timeout más relajado para la operación normal
+                    _puerto.ReadTimeout = 2000;
                     return true;
                 }
                 else
                 {
-                    // Intento fallback: A veces ya estaba conectado
-                    LogEstado?.Invoke($"Respuesta inesperada: {respuesta}. Asumiendo conexión forzada.");
-                    _conectado = true;
-                    return true;
+                    Log?.Invoke("❌ Puerto abierto, pero la máquina NO respondió al protocolo.");
+                    _puerto.Close(); // Cerramos porque no sirve de nada
+                    return false;
                 }
+            }
+            catch (UnauthorizedAccessException)
+            {
+                Log?.Invoke($"❌ Error: El puerto {puertoNombre} ya está en uso por otra aplicación.");
+                return false;
             }
             catch (Exception ex)
             {
-                LogEstado?.Invoke($"ERROR COM: {ex.Message}");
+                Log?.Invoke($"❌ Error crítico de conexión: {ex.Message}");
+                if (_puerto != null && _puerto.IsOpen) _puerto.Close();
                 return false;
             }
         }
 
-        public void Desconectar()
+        public void EnviarComando(string comando)
         {
+            if (!EstaConectado) return;
             try
             {
-                if (_puertoSerie.IsOpen) _puertoSerie.Close();
-            }
-            catch { }
-            _conectado = false;
-            LogEstado?.Invoke("Puerto cerrado.");
-        }
-
-        // --- CONTROL DE MOTOR Y ADQUISICIÓN ---
-
-        public void IniciarEnsayo(double frecuenciaHz)
-        {
-            if (!_conectado) return;
-
-            try
-            {
-                _puertoSerie.DiscardInBuffer();
-
-                // PASO 1: Configurar Adquisición (Sección 24)
-                // Pedimos el máximo de muestras (3FFF = 16383 puntos).
-                // Esto asegura que la máquina grabe internamente.
-                string cmdConfig = $"{SagaProtocol.ConfigurarAdquisicionHeader}3FFF{SagaProtocol.Terminador}";
-                _puertoSerie.Write(cmdConfig);
-                LogEstado?.Invoke("Memoria Configurada (3FFF).");
-                Thread.Sleep(100); // Tiempo para que el micro procese
-
-                // PASO 2: Encender Motor (Sección 22)
-                int valorEntero = (int)(frecuenciaHz * 10);
-                string hexFreq = valorEntero.ToString("X2"); // 1.5Hz -> 15 -> 0F
-                string cmdMotor = $"{SagaProtocol.EncenderMotorHeader}{hexFreq}{SagaProtocol.Terminador}";
-
-                _puertoSerie.Write(cmdMotor);
-                LogEstado?.Invoke($"MOTOR ON: {frecuenciaHz} Hz. Grabando en equipo...");
+                _puerto.Write(comando);
             }
             catch (Exception ex)
             {
-                LogEstado?.Invoke("Error al Iniciar: " + ex.Message);
+                Log?.Invoke($"Error al enviar comando: {ex.Message}");
             }
         }
 
-        public void DetenerYDescargar()
+        /// <summary>
+        /// Ejecuta la secuencia completa de adquisición de datos (El "Bucle Principal" del VB6)
+        /// </summary>
+        public async Task<List<string>> EjecutarEnsayo(double velocidadHz, double duracionSegundos)
         {
-            if (!_conectado) return;
+            var tramasHex = new List<string>();
 
-            Task.Run(async () =>
+            if (!EstaConectado) return tramasHex;
+
+            // 1. Configurar Motor
+            EnviarComando(SagaProtocol.EncenderMotor(velocidadHz));
+            // Esperar respuesta :C99Z... (simplificado por ahora)
+            await Task.Delay(500);
+
+            // 2. Estabilización (frmPrincipal.frm espera 4 segundos)
+            Log?.Invoke("Estabilizando motor...");
+            await Task.Delay(4000);
+
+            // 3. Solicitar Datos
+            // Calculo de cantidad basado en VB6: outRate / velocidad * 2 ciclos
+            // Nota: 187 y 131.3 son constantes mágicas extraídas de Variables.bas
+            long cantidadDatos = (long)((187 * velocidadHz + 131.3) / velocidadHz * 2);
+            EnviarComando(SagaProtocol.ConfigurarAdquisicion(cantidadDatos));
+            await Task.Delay(1000); // Espera a que termine de adquirir hardware
+
+            // 4. Descarga Masiva (La parte crítica de los 118 bytes)
+            EnviarComando(SagaProtocol.DescargaMasiva);
+            await Task.Delay(100);
+
+            int paquetes = (int)(cantidadDatos / 16);
+
+            for (int k = 0; k < paquetes; k++)
+            {
+                EnviarComando(SagaProtocol.Acknowledge); // Enviar "Q"
+
+                // Leer respuesta robusta (esperando 118 chars como en VB6)
+                string trama = await LeerTramaRobusta(118);
+
+                if (!string.IsNullOrEmpty(trama))
+                {
+                    // En VB6: Mid(trama, 6, 112) -> Quitaban cabecera y cola
+                    // La trama típica es ":C18D...CHECKZ"
+                    if (trama.Length >= 118)
+                    {
+                        // Aseguramos que no nos pasamos del índice
+                        int longitudUtil = Math.Min(112, trama.Length - 5);
+                        if (longitudUtil > 0)
+                            tramasHex.Add(trama.Substring(5, longitudUtil));
+                    }
+                }
+
+                ProgresoDescarga?.Invoke((int)((k / (float)paquetes) * 100));
+            }
+
+            // 5. Detener
+            EnviarComando(SagaProtocol.DetenerMotor);
+            return tramasHex;
+        }
+
+        private async Task<bool> ValidarConexionHardware()
+        {
+            // Esta lógica replica EXACTAMENTE lo que hacía el VB6 en frmConectar.frm
+            // .Output = ":C00DAZ" -> Espero(0.5) -> .Output = ":C00DHZ" -> Espero(0.5) -> Validar :C99Z
+
+            try
+            {
+                // Paso 1: Habilitar
+                EnviarComando(SagaProtocol.HabilitarEquipo);
+                await Task.Delay(250); // Pequeña pausa técnica
+
+                // Paso 2: Deshabilitar (Esto suele provocar el ACK de "Listo")
+                EnviarComando(SagaProtocol.DeshabilitarEquipo);
+
+                // Paso 3: Escuchar la respuesta
+                // Le damos hasta 1 segundo para responder "Estoy viva"
+                string respuesta = await LeerRespuestaConTimeout(1000);
+
+                // Análisis de respuesta (Nivel Dios: Logueamos lo que llega para depurar)
+                if (!string.IsNullOrEmpty(respuesta))
+                {
+                    // Limpiamos caracteres no imprimibles para el log para evitar basura en pantalla
+                    string hexDebug = BitConverter.ToString(Encoding.ASCII.GetBytes(respuesta));
+                    // Log?.Invoke($"[DEBUG] Respuesta Hardware: {respuesta.Trim()} (Hex: {hexDebug})");
+                }
+
+                // El protocolo VB6 busca ":C99Z" como confirmación de éxito
+                if (respuesta.Contains(":C99Z"))
+                {
+                    return true;
+                }
+
+                // Plan B: Si responde C88Z o cualquier cosa válida que empiece con :, asumimos conexión
+                // A veces las máquinas viejas tienen versiones de firmware distintas
+                if (respuesta.Contains(":C") && respuesta.Contains("Z"))
+                {
+                    Log?.Invoke("⚠️ Respuesta no estándar detectada, pero parece protocolo válido.");
+                    return true;
+                }
+
+                return false;
+            }
+            catch
+            {
+                return false;
+            }
+        }
+
+        private async Task<string> LeerRespuestaConTimeout(int timeoutMs)
+        {
+            return await Task.Run(() =>
             {
                 try
                 {
-                    // PASO 1: Parar Motor
-                    _puertoSerie.Write(SagaProtocol.DetenerMotor);
-                    LogEstado?.Invoke("MOTOR STOP. Iniciando descarga de datos...");
+                    var sw = System.Diagnostics.Stopwatch.StartNew();
+                    StringBuilder sb = new StringBuilder();
 
-                    await Task.Delay(500); // Esperar que el motor frene y el micro se estabilice
+                    while (sw.ElapsedMilliseconds < timeoutMs)
+                    {
+                        if (_puerto.BytesToRead > 0)
+                        {
+                            string data = _puerto.ReadExisting();
+                            sb.Append(data);
 
-                    // PASO 2: Pedir Volcado de Datos (Sección 25)
-                    _bufferRecepcion.Clear();
-                    _descargandoDatos = true;
-                    _puertoSerie.Write(SagaProtocol.IniciarDescargaDatos);
+                            // Si detectamos el terminador Z, salimos antes (optimización)
+                            if (data.Contains("Z")) break;
+                        }
+                        Thread.Sleep(10);
+                    }
+                    return sb.ToString();
                 }
-                catch (Exception ex)
+                catch
                 {
-                    LogEstado?.Invoke("Error en Secuencia de Parada: " + ex.Message);
+                    return string.Empty;
                 }
             });
         }
 
-        // --- PROCESAMIENTO DE DATOS (COMPLEJO) ---
-
-        private StringBuilder _bufferRecepcion = new StringBuilder();
-        private bool _descargandoDatos = false;
-
-        private void ProcesarEntradaPuerto(object sender, SerialDataReceivedEventArgs e)
+        private async Task<string> LeerTramaRobusta(int longitudEsperada)
         {
-            if (!_descargandoDatos) return;
-
-            try
+            return await Task.Run(() =>
             {
-                string data = _puertoSerie.ReadExisting();
-                _bufferRecepcion.Append(data);
-
-                string bufferStr = _bufferRecepcion.ToString();
-
-                // Analizamos si llegó el fin de transmisión
-                if (bufferStr.Contains(SagaProtocol.FinDeTransmision))
+                StringBuilder sb = new StringBuilder();
+                int intentos = 0;
+                // Intentamos leer hasta conseguir la longitud o exceder intentos
+                while (sb.Length < longitudEsperada && intentos < 50)
                 {
-                    _descargandoDatos = false;
-                    LogEstado?.Invoke("Descarga COMPLETADA.");
-                    DescargaFinalizada?.Invoke();
-                    return;
-                }
-
-                // Analizamos paquetes completos :C18D...
-                // Formato: :C18D [CCCC PPP] [CCCC PPP] ... Z
-                // CCCC: 4 hex Fuerza
-                // PPP: 3 hex Posición
-
-                while (true)
-                {
-                    int indexHeader = bufferStr.IndexOf(SagaProtocol.HeaderPaqueteDatos);
-                    int indexTerminador = bufferStr.IndexOf(SagaProtocol.Terminador, indexHeader + 1);
-
-                    if (indexHeader != -1 && indexTerminador != -1)
+                    try
                     {
-                        // Tenemos un paquete completo
-                        string paquete = bufferStr.Substring(indexHeader, (indexTerminador - indexHeader) + 1);
-
-                        // Parsear el contenido del paquete
-                        ParsearPaquete(paquete);
-
-                        // Eliminamos lo procesado del buffer
-                        bufferStr = bufferStr.Substring(indexTerminador + 1);
-                        _bufferRecepcion.Clear();
-                        _bufferRecepcion.Append(bufferStr);
-
-                        // CRÍTICO: El protocolo dice "la PC entonces debe enviar una Q"
-                        // Enviamos el ACK para pedir el siguiente paquete
-                        _puertoSerie.Write(SagaProtocol.AcknowledgePaquete);
+                        if (_puerto.BytesToRead > 0)
+                        {
+                            string data = _puerto.ReadExisting();
+                            sb.Append(data);
+                        }
                     }
-                    else
-                    {
-                        break; // Esperar más datos
-                    }
+                    catch { }
+                    Thread.Sleep(10); // Pausa pequeña para dejar llenar el buffer
+                    intentos++;
                 }
-            }
-            catch (Exception ex)
-            {
-                LogEstado?.Invoke("Error RX: " + ex.Message);
-            }
+                return sb.ToString();
+            });
         }
 
-        private void ParsearPaquete(string paquete)
+        public void Dispose()
         {
-            // Ejemplo paquete: :C18D 01FF00A 020000B Z
-            // Quitamos Header (:C18D) y Terminador (Z)
-            string payload = paquete.Replace(SagaProtocol.HeaderPaqueteDatos, "").Replace(SagaProtocol.Terminador, "");
-
-            // El payload contiene bloques de 7 caracteres (CCCCPPP)
-            // CCCC = 4 chars fuerza
-            // PPP = 3 chars posición
-
-            int tamanoBloque = 7;
-            for (int i = 0; i <= payload.Length - tamanoBloque; i += tamanoBloque)
+            if (_puerto != null)
             {
-                try
+                if (_puerto.IsOpen)
                 {
-                    string bloque = payload.Substring(i, tamanoBloque);
-                    string hexFuerza = bloque.Substring(0, 4);
-                    string hexPos = bloque.Substring(4, 3);
-
-                    // Conversión Hex a Int
-                    int valFuerza = Convert.ToInt32(hexFuerza, 16);
-                    int valPos = Convert.ToInt32(hexPos, 16);
-
-                    // --- CALIBRACIÓN FÍSICA ---
-                    // Ajustar estos factores según tu hardware real
-                    double fuerzaKg = valFuerza * 0.1; // Suposición estándar
-
-                    // Posición: El AD7730 suele ser 24 bits, pero aquí envían 12 bits (3 hex).
-                    // Si el valor es Signed (Complemento a 2) hay que tratarlo, 
-                    // pero asumiremos Unsigned con offset por ahora.
-                    double posMm = valPos * 0.1;
-
-                    NuevosDatosRecibidos?.Invoke(posMm, fuerzaKg);
+                    try
+                    {
+                        // Intentar dejar la máquina en estado seguro antes de cerrar
+                        _puerto.Write(SagaProtocol.DetenerMotor);
+                        _puerto.Close();
+                    }
+                    catch { }
                 }
-                catch
-                {
-                    // Ignorar punto corrupto
-                }
+                _puerto.Dispose();
             }
         }
     }

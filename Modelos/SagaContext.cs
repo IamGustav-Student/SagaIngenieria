@@ -1,22 +1,34 @@
 ﻿using Microsoft.EntityFrameworkCore;
-using System.IO; // Para manejar rutas de archivos
+using System;
+using System.IO;
 
 namespace SagaIngenieria.Modelos
 {
-    // Esta clase es el puente entre tu código y la base de datos SQLite
     public class SagaContext : DbContext
     {
-        // Estas son las "Tablas" que tendrá tu base de datos
         public DbSet<Cliente> Clientes { get; set; }
         public DbSet<Vehiculo> Vehiculos { get; set; }
         public DbSet<Ensayo> Ensayos { get; set; }
 
-        // Aquí configuramos dónde se guarda el archivo .db
+        // Configuración "Zero Config": La BD se crea en la carpeta del usuario
         protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
         {
-            // Guardaremos el archivo "SagaData.db" en la misma carpeta donde corre el programa
-            string rutaBaseDatos = "Data Source=SagaData.db";
-            optionsBuilder.UseSqlite(rutaBaseDatos);
+            string dbPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments), "SagaIngenieria", "SagaData.db");
+
+            // Asegurar que la carpeta exista
+            Directory.CreateDirectory(Path.GetDirectoryName(dbPath));
+
+            optionsBuilder.UseSqlite($"Data Source={dbPath}");
+        }
+
+        // Magia para inicialización automática
+        public static void Inicializar()
+        {
+            using (var db = new SagaContext())
+            {
+                // Crea la base de datos si no existe al arrancar
+                db.Database.EnsureCreated();
+            }
         }
     }
 }

@@ -1,21 +1,23 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.ComponentModel.DataAnnotations;
+using System.ComponentModel.DataAnnotations.Schema;
 
 namespace SagaIngenieria.Modelos
 {
-    // Esta clase define el auto de carreras
     public class Vehiculo
     {
+        [Key]
         public int Id { get; set; }
+        public string Marca { get; set; } = string.Empty;
+        public string Modelo { get; set; } = string.Empty;
+        public string Patente { get; set; } = string.Empty; // Placa/Matrícula
 
-        public int ClienteId { get; set; } // Para saber de quién es
-        public Cliente Cliente { get; set; } // Conexión con el dueño
+        [ForeignKey("Cliente")]
+        public int ClienteId { get; set; }
+        public virtual Cliente Cliente { get; set; }
 
-        public string Marca { get; set; } = string.Empty; // Ej: Porsche
-        public string Modelo { get; set; } = string.Empty; // Ej: 911 GT3
-        public string Categoria { get; set; } = string.Empty; // Ej: Turismo Nacional
-
-        // Un vehículo tiene muchos ensayos históricos
-        public List<Ensayo> Ensayos { get; set; } = new List<Ensayo>();
+        // Relación: Un vehículo tiene muchos ensayos históricos
+        public virtual ICollection<Ensayo> Ensayos { get; set; } = new List<Ensayo>();
     }
 }

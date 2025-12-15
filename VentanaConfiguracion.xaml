@@ -96,8 +96,8 @@
         <Border Grid.Column="1" Background="#252526" BorderBrush="#444" BorderThickness="1" Margin="10,0,0,0">
             <StackPanel>
                 <TextBlock Text="TABLA GENERADA" Foreground="Gray" Margin="5" HorizontalAlignment="Center" FontSize="12"/>
-                <ListBox x:Name="lstVelocidades" Background="Transparent" BorderThickness="0" Foreground="White" Height="280" Margin="5"/>
-                <Button Content="Previsualizar" Click="btnCalcular_Click" Margin="10" Width="Auto"/>
+                <ListBox x:Name="lstVelocidades" Background="Transparent" BorderThickness="0" Foreground="White" Height="270" Margin="5"/>
+                <Button Content="Previsualizar" Click="btnCalcular_Click" Margin="10" Width="Auto" RenderTransformOrigin="0.475,0.031" Height="28"/>
             </StackPanel>
         </Border>
 

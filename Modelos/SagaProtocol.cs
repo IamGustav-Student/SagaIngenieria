@@ -1,44 +1,38 @@
 ﻿namespace SagaIngenieria.Modelos
 {
-    /// <summary>
-    /// Definición estricta del protocolo según "Protocolo de comunicación.doc".
-    /// REVISIÓN INGENIERÍA: Se eliminaron comandos inventados.
-    /// </summary>
     public static class SagaProtocol
     {
-        // --- 1. ACCESO Y CONTROL ---
-        // Doc Sección 1: Clave de acceso.
-        // PC envía :C00Z -> Equipo responde :C99Z o :C88Z
-        public const string HabilitarEquipo = ":C00Z";
-
-        // Doc: "En caso de que se cuelgue... se puede deshabilitar" (No especifica comando explícito de deshabilitar, 
-        // pero asumimos reset o re-envío de C00Z. Mantenemos el estándar de cierre si existiera en versiones nuevas, 
-        // pero por defecto usamos el handshake básico).
-
-        // --- 2. MOTOR (Secciones 22 y 23) ---
-        // :C15DXXZ -> XX es frecuencia * 10 en Hexa.
-        public const string EncenderMotorHeader = ":C15D";
+        // Comandos de Control (Handshake)
+        public const string HabilitarEquipo = ":C00DAZ"; // EL CORRECTO
+        public const string DeshabilitarEquipo = ":C00DHZ";
         public const string DetenerMotor = ":C16Z";
+        public const string ResetPantalla = ":C14D0Z";
 
-        // --- 3. ADQUISICIÓN (MODO BATCH - Secciones 24 y 25) ---
+        // Comandos de Configuración (Hardware)
+        // Descubiertos en frmConfCelda.frm
+        public const string ConfModeRegister = ":C05D2080Z";
+        public const string ConfGainRegister = ":C0DD480000Z";
+        public const string ConfOffsetRegister = ":C0BD800000Z";
+        public const string ConfFilterRegister = ":C07D266200Z"; // Crítico para estabilidad
+        public const string EjecutarConfig = ":C12Z";
 
-        // Paso 1: Configurar cantidad de datos a adquirir.
-        // :C17DXXXXZ (XXXX = muestras en Hexa, Max 3FFF = 16383)
-        public const string ConfigurarAdquisicionHeader = ":C17D";
+        // Comandos de Operación
+        public const string LeerSensores = ":C1AZ"; // Polling (Calibración)
+        public const string DescargaMasiva = ":C18Z"; // Batch Dump
+        public const string Acknowledge = "Q"; // Para pedir siguiente paquete
 
-        // Paso 2: Pedir envío de datos almacenados (Volcado).
-        public const string IniciarDescargaDatos = ":C18Z";
+        // Comandos dinámicos (requieren parámetros)
+        public static string EncenderMotor(double hz)
+        {
+            // Formato VB6: ":C15D" & tHex(velocidades(j) * 10, "00") & "Z"
+            int val = (int)(hz * 10);
+            return $":C15D{val:X2}Z";
+        }
 
-        // Paso 3: Handshake de paquete. 
-        // La PC debe enviar 'Q' para pedir el siguiente paquete de 16 datos.
-        public const string AcknowledgePaquete = "Q";
-
-        // --- 4. RESPUESTAS ESPERADAS ---
-        public const string RespuestaOK_99 = ":C99Z"; // Operación completada / Habilitado
-        public const string RespuestaOK_88 = ":C88Z"; // Alternativa de habilitado
-
-        public const string HeaderPaqueteDatos = ":C18D"; // Cabecera de trama de datos
-        public const string FinDeTransmision = ":C19Z";   // Fin de volcado
-        public const string Terminador = "Z";
+        public static string ConfigurarAdquisicion(long cantidadDatos)
+        {
+            // Formato VB6: ":C17D" & tHex(cantDatosA, "0000") & "Z"
+            return $":C17D{cantidadDatos:X4}Z";
+        }
     }
 }
