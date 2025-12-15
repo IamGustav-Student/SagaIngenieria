@@ -1,26 +1,44 @@
 ﻿namespace SagaIngenieria.Modelos
 {
     /// <summary>
-    /// Definición estática del protocolo de comunicación SAGA.
-    /// Fuente: Código Legacy (SerialDynoDriver.cs)
+    /// Definición estricta del protocolo según "Protocolo de comunicación.doc".
+    /// REVISIÓN INGENIERÍA: Se eliminaron comandos inventados.
     /// </summary>
     public static class SagaProtocol
     {
-        // COMANDOS DE CONTROL
-        // La "DA" es crítica: Significa "Device Active". Sin esto, la máquina ignora al PC.
-        public const string HabilitarEquipo = ":C00DAZ";
-        public const string DeshabilitarEquipo = ":C00DHZ";
+        // --- 1. ACCESO Y CONTROL ---
+        // Doc Sección 1: Clave de acceso.
+        // PC envía :C00Z -> Equipo responde :C99Z o :C88Z
+        public const string HabilitarEquipo = ":C00Z";
 
-        // COMANDOS DE MOTOR
-        public const string EncenderMotorHeader = ":C15D"; // Se le concatena la frecuencia en HEX
+        // Doc: "En caso de que se cuelgue... se puede deshabilitar" (No especifica comando explícito de deshabilitar, 
+        // pero asumimos reset o re-envío de C00Z. Mantenemos el estándar de cierre si existiera en versiones nuevas, 
+        // pero por defecto usamos el handshake básico).
+
+        // --- 2. MOTOR (Secciones 22 y 23) ---
+        // :C15DXXZ -> XX es frecuencia * 10 en Hexa.
+        public const string EncenderMotorHeader = ":C15D";
         public const string DetenerMotor = ":C16Z";
 
-        // ADQUISICIÓN DE DATOS
-        // :C1AZ Pide una lectura instantánea (Polling)
-        public const string LeerSensoresInstantaneo = ":C1AZ";
+        // --- 3. ADQUISICIÓN (MODO BATCH - Secciones 24 y 25) ---
 
-        // RESPUESTAS ESPERADAS
-        public const string HeaderRespuestaDatos = ":C1BD"; // La máquina responde con esto antes de los datos
+        // Paso 1: Configurar cantidad de datos a adquirir.
+        // :C17DXXXXZ (XXXX = muestras en Hexa, Max 3FFF = 16383)
+        public const string ConfigurarAdquisicionHeader = ":C17D";
+
+        // Paso 2: Pedir envío de datos almacenados (Volcado).
+        public const string IniciarDescargaDatos = ":C18Z";
+
+        // Paso 3: Handshake de paquete. 
+        // La PC debe enviar 'Q' para pedir el siguiente paquete de 16 datos.
+        public const string AcknowledgePaquete = "Q";
+
+        // --- 4. RESPUESTAS ESPERADAS ---
+        public const string RespuestaOK_99 = ":C99Z"; // Operación completada / Habilitado
+        public const string RespuestaOK_88 = ":C88Z"; // Alternativa de habilitado
+
+        public const string HeaderPaqueteDatos = ":C18D"; // Cabecera de trama de datos
+        public const string FinDeTransmision = ":C19Z";   // Fin de volcado
         public const string Terminador = "Z";
     }
 }
